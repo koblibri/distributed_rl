@@ -1,3 +1,4 @@
+import time
 import experiment_api
 import RLbrain_v1
 from RLbrain_v1 import Agent
@@ -53,30 +54,58 @@ def send_exp():
 
 def compute_reward(old_state, new_state, init_state):
     # compare state, if position changed get reward. if z axis is lower than initial, get big reward.
+
+    x_new = new_state[1].position.x
+    y_new = new_state[1].position.y
+    z_new = new_state[1].position.z
+
+    new_position_np = np.array((x_new, y_new, z_new))
+
+    x_old = old_state[1].position.x
+    y_old = old_state[1].position.y
+    z_old = old_state[1].position.z
+
+    old_position_np = np.array((x_old, y_old, z_old))
+
+    distance = np.linalg.norm(new_position_np - old_position_np)
+
+    z_init = init_state[1].position.z
+    # check if blue object fell from the table
+    eps = 0.1
+    if z_new + eps < z_init:
+        return 100
+    
+    # check if blue object was moved
+    if(distance > eps):
+        return 10
+
     return 1
 
 
 def check_done(new_state, init_state):
-    # check the game is over or not, @@@@@add a timer here!
-    return True
+    # + 0.1 because there are some noises
+    if((new_state[1].position.z + 0.1) < init_state[1].position.z):
+        return True
+    else:
+        return False
 
 
 robot = experiment_api.Robot()
+time.sleep(1)
 worker = Agent(num_actions=6)
 
 
 memory = ReplayMemory(10000)
 
-
 num_episodes = 50
 for i in range(num_episodes):
-    robot.reset()
+    # robot.reset()
     init_state = robot.get_current_state()
+    print(robot.get_current_state())
     state = init_state
-    worker.load_state_dict(pull_parameters()) # before every game, request newest parameters
 
     for actions_counter in count():
-        action = worker.select_action(state)
+        action = worker(state)
         j1, j2, j3, j4, j5, j6 = action
         robot.act(j1, j2, j3, j4, j5, j6)
         new_state = robot.get_current_state()
@@ -86,12 +115,10 @@ for i in range(num_episodes):
 
         state = new_state
 
-        if check_done():
-            send_exp()  # one game over, send the experience
-            print('number of actions in this round game:', actions_counter)
+        if check_done(init_state, new_state):
             break
 
+    send_exp()  # one game over, send the experience
+    print('number of actions in this round game:', actions_counter)
+
 print(num_episodes, ' training over')
-
-
-
