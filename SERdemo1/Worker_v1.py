@@ -14,6 +14,8 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torchvision.transforms as T
 
+import random
+
 
 # if gpu is to be used
 device = torch.device('cuda')
@@ -74,12 +76,20 @@ def compute_reward(old_state, new_state, init_state):
     eps = 0.1
     if z_new + eps < z_init:
         return 100
-    
+
     # check if blue object was moved
     if(distance > eps):
         return 10
 
     return 1
+
+
+def select_strategy(strategy_threshold):
+    prob = random.uniform(0, 1)
+    strategy = 'exploit'
+    if prob < strategy_threshold:
+        strategy = 'explore'
+    return strategy
 
 
 def check_done(new_state, init_state):
@@ -99,15 +109,21 @@ memory = ReplayMemory(10000)
 
 num_episodes = 50
 for i in range(num_episodes):
-    # robot.reset()
+    robot.reset()
     init_state = robot.get_current_state()
-    print(robot.get_current_state())
     state = init_state
-
+    strategy_threshold = 1 - 1/(num_episodes - i)
+    strategy = select_strategy(strategy_threshold)
     for actions_counter in count():
-        action = worker(state)
+        if strategy == 'exploit':
+            action = worker(state)
+        else:
+            action = []
+            for i in range(6):
+                action.append(random.uniform(-3, 3))
         j1, j2, j3, j4, j5, j6 = action
         robot.act(j1, j2, j3, j4, j5, j6)
+        time.sleep(1)
         new_state = robot.get_current_state()
         reward = compute_reward(state, new_state, init_state)
 
