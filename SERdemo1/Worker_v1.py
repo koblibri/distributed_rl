@@ -22,6 +22,12 @@ device = torch.device('cuda')
 
 Transition = namedtuple('Transition', ('state', 'action', 'reward'))
 
+import socket, selectors
+import SERdemo1.socketclient as socketclient
+sel = selectors.DefaultSelector()
+host = '127.0.0.1'
+port = 65432
+
 
 class ReplayMemory(object):
 
@@ -43,14 +49,62 @@ class ReplayMemory(object):
     def __len__(self):
         return len(self.memory)
 
+def create_request(action, value):
+    if action == "pull":
+        return dict(
+            type="binary/pull",
+            encoding="binary",
+            content=None,
+        )
+    else:
+        return dict(
+            type="binary/push",
+            encoding="binary",
+            content=bytes(value),
+        )
+
+
+def start_connection(host, port, request):
+    addr = (host, port)
+    print("starting connection to", addr)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setblocking(False)
+    sock.connect_ex(addr)
+    events = selectors.EVENT_READ | selectors.EVENT_WRITE
+    message = socketclient.Message(sel, sock, addr, request)
+    sel.register(sock, events, data=message)
+
+def wait_response():
+    try:
+        while True:
+            events = sel.select(timeout=1)
+            for key, mask in events:
+                message = key.data
+                try:
+                    message.process_events(mask)
+                except Exception:
+                    print(
+                        "main: error: exception for",
+                        f"{message.addr}:\n{traceback.format_exc()}",
+                    )
+                    message.close()
+            # Check for a socket being monitored to continue.
+            if not sel.get_map():
+                break
+    finally:
+        sel.close()
 
 def pull_parameters():
+    request = create_request("pull", None)
+    start_connection(host, port, request)
     # socket get learner side .state_dict()
-    return
-
+    wait_response()
 
 def send_exp():
+    request = create_request("push", [1,2,3] ) #TODO: Enter new Experiences here
+    start_connection(host, port, request)
     # socket send experience to learner
+    wait_response()
     return
 
 
