@@ -1,6 +1,8 @@
 import sys
-import selectors
-import json
+try:
+    import selectors
+except ImportError:
+    import selectors2 as selectors    
 import io
 import struct
 
@@ -27,14 +29,14 @@ class Message:
         elif mode == "rw":
             events = selectors.EVENT_READ | selectors.EVENT_WRITE
         else:
-            raise ValueError(f"Invalid events mask mode {repr(mode)}.")
+            raise ValueError("Invalid events mask mode %s." %(repr(mode)))
         self.selector.modify(self.sock, events, data=self)
 
     def _read(self):
         try:
             # Should be ready to read
             data = self.sock.recv(4096)
-        except BlockingIOError:
+        except IOError:
             # Resource temporarily unavailable (errno EWOULDBLOCK)
             pass
         else:
@@ -49,14 +51,14 @@ class Message:
             try:
                 # Should be ready to write
                 sent = self.sock.send(self._send_buffer)
-            except BlockingIOError:
+            except IOError:
                 # Resource temporarily unavailable (errno EWOULDBLOCK)
                 pass
             else:
                 self._send_buffer = self._send_buffer[sent:]
 
     def _create_message(
-        self, *, content_bytes, content_type, content_encoding
+        self, content_bytes, content_type, content_encoding
     ):
         message_len_hdr = struct.pack(">H", len(content_bytes) )
         message_type_hdr = struct.pack(">B", content_type)
@@ -65,7 +67,8 @@ class Message:
 
     def _process_response_binary_content(self):
         content = self.response
-        print(f"got response: {repr(content)}")
+        print("got response: %s" %( repr(content) ))
+
 
     def process_events(self, mask):
         if mask & selectors.EVENT_READ:
@@ -99,16 +102,16 @@ class Message:
             self.selector.unregister(self.sock)
         except Exception as e:
             print(
-                f"error: selector.unregister() exception for",
-                f"{self.addr}: {repr(e)}",
+                "error: selector.unregister() exception for %s: %s"
+                %( self.addr, repr(e) )
             )
 
         try:
             self.sock.close()
         except OSError as e:
             print(
-                f"error: socket.close() exception for",
-                f"{self.addr}: {repr(e)}",
+                "error: socket.close() exception for %s: %s"
+                %( self.addr, repr(e) )
             )
         finally:
             # Delete reference to socket object for garbage collection
@@ -153,13 +156,13 @@ class Message:
         self._recv_buffer = self._recv_buffer[content_len:]
         if self.content_type == 1:
             self.response = data
-            #TODO: Get data back to Worker
             print(
-                f'received {self.content_type} response from',
-                self.addr,
+                "received %d response from %s"
+                %( self.content_type, self.addr)
             )
             self._process_response_binary_content()
         elif self.content_type == 3:
+            # Binary or unknown content-type
             print("Ack Recieved")
             self.response = data
         else: 

@@ -8,7 +8,11 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 
-import socketserver, socket, selectors, traceback
+import socketserver, socket, traceback
+try:
+    import selectors
+except ImportError:
+    import selectors2 as selectors   #run  python -m pip install selectors2
 host = '127.0.0.1'
 port = 65432
 sel = selectors.DefaultSelector()
@@ -67,10 +71,9 @@ def socket_init():
                         message.process_events(mask)
                     except Exception:
                         print(
-                            "main: error: exception for",
-                            f"{message.addr}:\n{traceback.format_exc()}",
-                        )
-                        message.close()
+                        "main: error: exception for %s\n %s" 
+                        % ( message.addr, traceback.format_exc ) )
+                    message.close()
     finally: sel.close()
 
 def send_parameters():

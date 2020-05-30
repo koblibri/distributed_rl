@@ -1,15 +1,11 @@
 import sys
-import selectors
-import json
+try:
+    import selectors
+except ImportError:
+    import selectors2 as selectors    
 import io
 import struct
 import SERdemo1Learner.RLbrain_v1, SERdemo1Learner.Learner_v1
-
-request_search = {
-    "morpheus": "Follow the white rabbit. \U0001f430",
-    "ring": "In the caves beneath the Misty Mountains. \U0001f48d",
-    "\U0001f436": "\U0001f43e Playing ball! \U0001f3d0",
-}
 
 
 class Message:
@@ -33,14 +29,14 @@ class Message:
         elif mode == "rw":
             events = selectors.EVENT_READ | selectors.EVENT_WRITE
         else:
-            raise ValueError(f"Invalid events mask mode {repr(mode)}.")
+            raise ValueError("Invalid events mask mode %s" %( repr(mode) ))
         self.selector.modify(self.sock, events, data=self)
 
     def _read(self):
         try:
             # Should be ready to read
             data = self.sock.recv(4096)
-        except BlockingIOError:
+        except IOError:
             # Resource temporarily unavailable (errno EWOULDBLOCK)
             pass
         else:
@@ -55,7 +51,7 @@ class Message:
             try:
                 # Should be ready to write
                 sent = self.sock.send(self._send_buffer)
-            except BlockingIOError:
+            except IOError:
                 # Resource temporarily unavailable (errno EWOULDBLOCK)
                 pass
             else:
@@ -106,16 +102,16 @@ class Message:
             self.selector.unregister(self.sock)
         except Exception as e:
             print(
-                f"error: selector.unregister() exception for",
-                f"{self.addr}: {repr(e)}",
+                "error: selector.unregister() exception for %s: %s"
+                % ( self.addr, repr(e) )
             )
 
         try:
             self.sock.close()
         except OSError as e:
             print(
-                f"error: socket.close() exception for",
-                f"{self.addr}: {repr(e)}",
+                "error: socket.close() exception for %s, %s"
+                % ( self.addr, repr(e) )
             )
         finally:
             # Delete reference to socket object for garbage collection
@@ -140,7 +136,7 @@ class Message:
             self.response_created = True
             self._send_buffer += message
         else: 
-            message_len_hdr = struct.pack(">H", len(bytes([])) )
+            message_len_hdr = struct.pack(">H", len(bytes(1)) )
             message_type_hdr = struct.pack(">B", 3)
             message = message_len_hdr + message_type_hdr
             self.response_created = True
@@ -159,10 +155,10 @@ class Message:
         else:
             print("Recieved new experiences")
             self.request = data
-            SERdemo1Learner.Learner_v1.receive_exp(data) #TODO: Correct? 
+            print ("Recieved: %s" %(data))
             print(
-                f'received a "{self.content_type}" request from',
-                self.addr,
+                "received a %s request from %s" 
+                % (self.content_type, self.addr)
             )
             #New experiences recieved, process them here
         # Set selector to listen for write events, we're done reading.
