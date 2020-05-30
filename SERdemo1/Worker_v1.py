@@ -157,7 +157,7 @@ def check_done(new_state, init_state):
 robot = experiment_api.Robot()
 time.sleep(1)
 worker = Agent(num_actions=6)
-
+Y
 
 memory = ReplayMemory(10000)
 
@@ -185,7 +185,7 @@ for i in range(num_episodes):
 
         state = new_state
 
-        if check_done(init_state, new_state):
+        if check_done(new_state, init_state):
             break
 
     send_exp()  # one game over, send the experience
