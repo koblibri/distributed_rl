@@ -4,7 +4,8 @@ from operator import itemgetter
 from std_msgs.msg import Float64
 from sensor_msgs.msg import JointState
 from gazebo_msgs.srv import GetModelState
-
+from gazebo_msgs.srv import SetModelState
+from gazebo_msgs.msg import ModelState
 
 class Robot:
 
@@ -22,7 +23,15 @@ class Robot:
         self.joint_topics = [topic_1, topic_2, topic_3, topic_4, topic_5, topic_6]
 
         rospy.wait_for_service("gazebo/get_model_state", 10.0)
+        rospy.wait_for_service("gazebo/set_model_state", 10.0)
         self.__get_pose_srv = rospy.ServiceProxy("gazebo/get_model_state", GetModelState)
+        self.__set_pose_srv = rospy.ServiceProxy("gazebo/set_model_state", SetModelState)
+
+        # get the initial state of the blue object
+        self.object_init_state = ModelState()
+        self.object_init_state.model_name = 'BLUE_cylinder'
+        self.object_init_state.pose = self.__get_pose_srv('BLUE_cylinder', 'world').pose
+        self.object_init_state.scale = self.__get_pose_srv('BLUE_cylinder', 'world').scale
 
         # Variables that hold finger states
         self.__current_state = [None]
@@ -45,6 +54,9 @@ class Robot:
         """
         for topic in self.joint_topics:
             topic.publish(Float64(0.0))
+
+        reset_obj = self.__set_pose_srv(self.object_init_state)  # reset the 'BLUE_cylinder' & print status
+        print(reset_obj)
 
     def get_current_state(self):
         """
@@ -70,3 +82,4 @@ class Robot:
         self.joint_topics[3].publish(Float64(j4))
         self.joint_topics[4].publish(Float64(j5))
         self.joint_topics[5].publish(Float64(j6))
+
