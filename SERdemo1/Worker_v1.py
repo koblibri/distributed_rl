@@ -161,7 +161,6 @@ def check_done(new_state, init_state):
 robot = experiment_api.Robot()
 time.sleep(1)
 worker = Agent(num_actions=6)
-Y
 
 memory = ReplayMemory(10000)
 
