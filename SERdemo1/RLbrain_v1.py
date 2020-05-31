@@ -15,6 +15,13 @@ class Agent(nn.Module):
         self.l2 = nn.Linear(128, num_actions)
 
     def forward(self, x):
+        """forward pass for a robot state
+
+        :param x: tuple of position of blue object and pose of the robot
+        :type x: ((float, float, float),geometry_msgs.msg._Pose.Pose)
+        :return: actions for the next step
+        :rtype: List[float]
+        """
         # change tuple to array, add position of object
         parameters = list(x[0]) + [x[1].position.x,
                                    x[1].position.y, x[1].position.z]

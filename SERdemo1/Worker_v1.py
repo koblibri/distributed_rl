@@ -1,3 +1,6 @@
+import traceback
+import socket
+import socketclient
 import time
 import experiment_api
 import RLbrain_v1
@@ -16,18 +19,15 @@ import torchvision.transforms as T
 
 import random
 
-
 # if gpu is to be used
 device = torch.device('cuda')
 
 Transition = namedtuple('Transition', ('state', 'action', 'reward'))
 
-import socket, traceback
 try:
     import selectors
 except ImportError:
-    import selectors2 as selectors  #run  python -m pip install selectors2
-import socketclient
+    import selectors2 as selectors  # run  python -m pip install selectors2
 sel = selectors.DefaultSelector()
 host = '127.0.0.1'
 port = 65432
@@ -52,6 +52,7 @@ class ReplayMemory(object):
 
     def __len__(self):
         return len(self.memory)
+
 
 def create_request(action, value):
     if action == "pull":
@@ -78,6 +79,7 @@ def start_connection(host, port, request):
     message = socketclient.Message(sel, sock, addr, request)
     sel.register(sock, events, data=message)
 
+
 def wait_response():
     try:
         while True:
@@ -88,9 +90,9 @@ def wait_response():
                     message.process_events(mask)
                 except Exception:
                     print(
-                    "main: error: exception for %s \n %s" 
-                    % ( message.addr, traceback.format_exc() )
-                )
+                        "main: error: exception for %s \n %s"
+                        % (message.addr, traceback.format_exc())
+                    )
                     message.close()
             # Check for a socket being monitored to continue.
             if not sel.get_map():
@@ -98,14 +100,17 @@ def wait_response():
     finally:
         sel.close()
 
+
 def pull_parameters():
     request = create_request("pull", None)
     start_connection(host, port, request)
     # socket get learner side .state_dict()
     wait_response()
 
+
 def send_exp():
-    request = create_request("push", [1,2,3] ) #TODO: Enter new Experiences here
+    # TODO: Enter new Experiences here
+    request = create_request("push", [1, 2, 3])
     start_connection(host, port, request)
     # socket send experience to learner
     wait_response()
@@ -113,8 +118,18 @@ def send_exp():
 
 
 def compute_reward(old_state, new_state, init_state):
-    # compare state, if position changed get reward. if z axis is lower than initial, get big reward.
+    """computes the reward for an actio nold_state -> new_state
 
+    :param old_state: robot state before action
+    :type old_state: ( _ ,geometry_msgs.msg._Pose.Pose)
+    :param new_state: robot state after action
+    :type new_state: ( _ ,geometry_msgs.msg._Pose.Pose)
+    :param init_state: initial robot state
+    :type init_state: ( _ ,geometry_msgs.msg._Pose.Pose)
+    :return: reward for this action
+    :rtype: int
+    """
+    # compare state, if position changed get reward. if z axis is lower than initial, get big reward.
     x_new = new_state[1].position.x
     y_new = new_state[1].position.y
     z_new = new_state[1].position.z
@@ -143,6 +158,13 @@ def compute_reward(old_state, new_state, init_state):
 
 
 def select_strategy(strategy_threshold):
+    """ select strategy (explore or exploit) for a given threshold 
+
+    :param strategy_threshold: probability threshold
+    :type strategy_threshold: int
+    :return: strategy (explore or exploit) for the next round
+    :rtype: String
+    """
     prob = random.uniform(0, 1)
     strategy = 'exploit'
     if prob < strategy_threshold:
@@ -151,6 +173,15 @@ def select_strategy(strategy_threshold):
 
 
 def check_done(new_state, init_state):
+    """check, if robot is done (blue object fell from the table)
+
+    :param new_state: robot state after action
+    :type new_state:  ( _ ,geometry_msgs.msg._Pose.Pose)
+    :param init_state: initial robot state
+    :type init_state: ( _ ,geometry_msgs.msg._Pose.Pose)
+    :return: true, if object has fallen, else false
+    :rtype: bool
+    """
     # + 0.1 because there are some noises
     if((new_state[1].position.z + 0.1) < init_state[1].position.z):
         return True
