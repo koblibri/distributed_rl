@@ -83,3 +83,5 @@ class Robot:
         self.joint_topics[4].publish(Float64(j5))
         self.joint_topics[5].publish(Float64(j6))
 
+# to get position of robot's hand, using:
+# self.__get_pose_srv('robot', 'COL_COL_COL_VIS_VIS_VIS_VIS_VIS_VIS_VIS_VIS_VIS_hollie_real.005')

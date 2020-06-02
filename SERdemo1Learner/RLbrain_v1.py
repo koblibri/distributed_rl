@@ -33,7 +33,7 @@ class Agent(nn.Module):
 class MyLoss(nn.Module):
     def __init__(self):
         super(MyLoss, self).__init__()
-        self.num_actions = 6
+        self.num_actions = 12
 
     def forward(self, q_pred, true_action, discounted_reward):
         # define the loss,
@@ -41,8 +41,6 @@ class MyLoss(nn.Module):
         # print('true_action:', true_action)
         # print('q_pred:', q_pred)
         # print('one_hot:', one_hot)
-
-
         neg_log_prob = torch.sum(-torch.log(F.softmax(q_pred, dim=1)) * one_hot, dim=1)
         # print('neg_log_prob:', neg_log_prob)
         loss = torch.mean(neg_log_prob * discounted_reward)
