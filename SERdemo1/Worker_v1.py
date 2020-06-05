@@ -310,7 +310,7 @@ for i in range(num_episodes):
             new_joint_state = [0,-2,0,0,0,0]
             test = 3
             action = 4
-        elif(test == 3)
+        elif(test == 3):
             new_joint_state = [-1,-2,0,0,0,0]
             test = 1
             action = 5
