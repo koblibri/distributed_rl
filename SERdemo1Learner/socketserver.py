@@ -5,7 +5,7 @@ except ImportError:
     import selectors2 as selectors    
 import io
 import struct
-import SERdemo1Learner.RLbrain_v1, SERdemo1Learner.Learner_v1
+import Learner_v1
 
 
 class Message:
@@ -61,7 +61,7 @@ class Message:
                     self.close()
 
     def _create_message(
-        self, *, content_bytes, content_type, content_encoding
+        self, content_bytes, content_type, content_encoding
     ):
         message_len_hdr = struct.pack(">H", len(content_bytes) )
         message_type_hdr = struct.pack(">B", content_type)
@@ -70,7 +70,7 @@ class Message:
 
     def _create_response_binary_content(self):
         response = {
-            "content_bytes": bytes([9,8,7,6,5,4,3,2,1]), #TODO: insert new parameter data here
+            "content_bytes": bytes(Learner_v1.learner.state_dict()), #TODO: insert new parameter data here
             "content_type": 1,
             "content_encoding": "binary",
         }
@@ -161,6 +161,7 @@ class Message:
                 % (self.content_type, self.addr)
             )
             #New experiences recieved, process them here
+            Learner_v1.receive_exp(Learner_v1.learner, data)
         # Set selector to listen for write events, we're done reading.
         self._set_selector_events_mask("w")
 

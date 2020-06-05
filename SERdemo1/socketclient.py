@@ -67,7 +67,9 @@ class Message:
 
     def _process_response_binary_content(self):
         content = self.response
+        # here maybe #TODO: receive new parameter data here
         print("got response: %s" %( repr(content) ))
+        
 
     def process_events(self, mask):
         if mask & selectors.EVENT_READ:
@@ -155,6 +157,7 @@ class Message:
         self._recv_buffer = self._recv_buffer[content_len:]
         if self.content_type == 1:
             self.response = data
+            # TODO: Get data back to Worker
             print(
                 "received %d response from %s"
                 %( self.content_type, self.addr)

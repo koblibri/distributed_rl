@@ -15,7 +15,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-import torchvision.transforms as T
 
 import random
 
@@ -49,6 +48,10 @@ class ReplayMemory(object):
 
     def sample(self, batch_size):
         return random.sample(self.memory, batch_size)
+
+    def clear(self):
+        self.memory = []
+        self.position = 0
 
     def __len__(self):
         return len(self.memory)
@@ -115,8 +118,53 @@ def send_exp():  # socket send experience to learner
     start_connection(host, port, request)
 
     wait_response()
+
+    memory.clear()
     # TODO: clear memory
     return
+
+
+def check_stable_state(init_state=None):  # check done, roll&drop.
+    """checks if the object state and the robot state changed in the last 0.1 seconds
+    :return: True, if state did not change, False otherwise
+    :rtype: bool
+    """
+    eps = 0.1
+    _, object_old_state, robot_old_state = robot.get_current_state()
+    time.sleep(0.1)
+    _, object_new_state, robot_new_state = robot.get_current_state()
+    new_state = robot.get_current_state()
+
+    distance_object = get_distance(object_old_state, object_new_state)
+    distance_endeffector = get_distance(robot_old_state, robot_new_state)
+
+    # if distance < threashold: stable state
+    if distance_object < eps and distance_endeffector < eps:
+        return True
+    if check_done(new_state, init_state):
+        return True
+    return False
+
+
+def get_position(state):
+    """gets position of a state pose in a np.array
+
+    :param state: pose of a state
+    :type state: geometry_msgs.msg._Pose.Pose
+    :return: x,y,z state position in np.array
+    :rtype: np.array(Float, Float, Float)
+    """
+    x = state.position.x
+    y = state.position.y
+    z = state.position.z
+    return np.array((x, y, z))
+
+
+def get_distance(state_1, state_2):
+    postion_1 = get_position(state_1)
+    postion_2 = get_position(state_2)
+    return np.linalg.norm(
+        postion_1 - postion_2)
 
 
 def compute_reward(old_state, new_state, init_state):
@@ -131,32 +179,30 @@ def compute_reward(old_state, new_state, init_state):
     :return: reward for this action
     :rtype: int
     """
-    # compare state, if position changed get reward. if z axis is lower than initial, get big reward.
-    x_new = new_state[1].position.x
-    y_new = new_state[1].position.y
-    z_new = new_state[1].position.z
+    _, init_object, _ = init_state
+    _, object_new, endeffector_new = new_state
+    _, object_old, endeffector_old = old_state
 
-    new_position_np = np.array((x_new, y_new, z_new))
+    distance_old = get_distance(object_old, endeffector_old)
 
-    x_old = old_state[1].position.x
-    y_old = old_state[1].position.y
-    z_old = old_state[1].position.z
+    distance_new = get_distance(object_new, endeffector_new)
 
-    old_position_np = np.array((x_old, y_old, z_old))
+    distance_change_object = get_distance(object_old, object_new)
 
-    distance = np.linalg.norm(new_position_np - old_position_np)
-
-    z_init = init_state[1].position.z
+    z_init = init_object.position.z
+    z_new = object_new.position.z
     # check if blue object fell from the table
     eps = 0.1
+    extra = 0
     if z_new + eps < z_init:
-        return 100
+        extra += 100
 
     # check if blue object was moved
-    if(distance > eps):
-        return 10
+    if(distance_change_object > eps):
+        extra += 10
 
-    return 1
+    return distance_old - distance_new + extra
+
 
 
 def select_strategy(strategy_threshold):
@@ -209,24 +255,33 @@ def transfer_action(current_joint_state, action):
     action -= 5
     if action <= 0:
         action -= 1
-    act_joint_num = torch.abs(action) - 1
-    new_joint_state = current_joint_state[act_joint_num] + torch.sign(action)
+    act_joint_num = np.abs(action) - 1
+    current_joint_state[int(act_joint_num)] += np.sign(action)
+    new_joint_state = current_joint_state
     return new_joint_state
 
 
 robot = experiment_api.Robot()
-time.sleep(1)
+time.sleep(5)
 memory = ReplayMemory(10000)
 worker = Agent(num_actions=12)  # now num_action is 12, because each joint has two direction!
                                 #  actions transferred by transfer_action(current_joint_state, action)
 
+fast_test = False  # unable this, robot will perform act(0,-1,0,0,0,0) -> (0,-2,0,0,0,0) -> (-1,-2,0,0,0,0)
+
 num_episodes = 50  # 50 rounds of games
 for i in range(num_episodes):
+    test = 0
+    if fast_test is True:
+        test = 1
     robot.reset()
+    while (not check_stable_state()):
+        time.sleep(1)
     init_state = robot.get_current_state()  # @@@@ here using self.object_init_state!!
     state = init_state
     strategy_threshold = 1 - 1/(num_episodes - i)
     strategy = select_strategy(strategy_threshold)
+    pull_parameters()
     for actions_counter in count():
 
         # object state has to be transferred at here,
@@ -247,10 +302,25 @@ for i in range(num_episodes):
 
             # for i in range(6):
             #     action.append(random.uniform(-3, 3))
+        if(test == 1):
+            new_joint_state =[0,-1,0,0,0,0]
+            test = 2
+            action = 4
+        elif(test == 2):
+            new_joint_state = [0,-2,0,0,0,0]
+            test = 3
+            action = 4
+        elif(test == 3)
+            new_joint_state = [-1,-2,0,0,0,0]
+            test = 1
+            action = 5
+
         j1, j2, j3, j4, j5, j6 = new_joint_state
         robot.act(j1, j2, j3, j4, j5, j6)
 
-        time.sleep(3)  # sleep wait for this action finished  @@@ to be done: speed up the robot joint!!!
+        time.sleep(1)  # sleep wait for this action finished  @@@ to be done: speed up the robot joint!!!
+        while (not check_stable_state(init_state)):
+            time.sleep(0.5)
         new_state = robot.get_current_state()
         reward = compute_reward(state, new_state, init_state)
 
@@ -261,6 +331,7 @@ for i in range(num_episodes):
         state = new_state
 
         if check_done(new_state, init_state):
+            send_exp()
             break
 
     send_exp()  # one game over, send the experience

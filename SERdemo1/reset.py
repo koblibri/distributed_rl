@@ -1,5 +1,5 @@
 import rospy
-
+import time
 from operator import itemgetter
 from std_msgs.msg import Float64
 from sensor_msgs.msg import JointState
@@ -32,7 +32,16 @@ class Robot:
         self.object_init_state.model_name = 'BLUE_cylinder'
         self.object_init_state.pose = self.__get_pose_srv('BLUE_cylinder', 'world').pose
         self.object_init_state.scale = self.__get_pose_srv('BLUE_cylinder', 'world').scale
-
+        self.object_init_state.pose.position.x = -0.380242735867
+        self.object_init_state.pose.position.y = -0.256517463776
+        self.object_init_state.pose.position.z = 1.12013355538
+        self.object_init_state.pose.orientation.x = 0.000772991735408
+        self.object_init_state.pose.orientation.y = -0.000885429290148
+        self.object_init_state.pose.orientation.z = 0.00401944480518
+        self.object_init_state.pose.orientation.w = 0.999991231243
+        self.object_init_state.scale.x=1.0
+        self.object_init_state.scale.y=1.0
+        self.object_init_state.scale.z=1.0
         # Variables that hold finger states
         self.__current_state = [None]
 
@@ -87,3 +96,6 @@ class Robot:
 
 # to get position of robot's hand, using:
 # self.__get_pose_srv('robot', 'COL_COL_COL_VIS_VIS_VIS_VIS_VIS_VIS_VIS_VIS_VIS_hollie_real.005')
+robot = Robot()
+time.sleep(5)
+robot.reset()

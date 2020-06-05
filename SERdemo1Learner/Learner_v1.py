@@ -57,7 +57,7 @@ def socket_init():
     # Avoid bind() exception: OSError: [Errno 48] Address already in use
     lsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     lsock.bind((host, port))
-    lsock.listen()
+    lsock.listen(5)
     print("listening on", (host, port))
     lsock.setblocking(False)
     sel.register(lsock, selectors.EVENT_READ, data=None)
@@ -82,14 +82,15 @@ def socket_init():
 def send_parameters():
     # socket send parameters back to worker
     # when receive newest parameter request, call this
+    learner.state_dict()
     return
 
 
-def receive_exp(learner):
+def receive_exp(learner, data):
     # socket receive experience, then perform training
     # when receive experience from workers, call this
     # losses = []
-
+    ReplayMemory.push(data)
     for i in range(2):
         training_process(learner)
     # print(loss_dict)
