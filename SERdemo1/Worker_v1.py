@@ -220,7 +220,7 @@ def select_strategy(strategy_threshold):
     return strategy
 
 
-def check_done(new_state, init_state):
+def check_done(new_state, init_state, time_start=None):
     """check, if robot is done (blue object fell from the table)
 
     :param new_state: robot state after action
@@ -230,8 +230,12 @@ def check_done(new_state, init_state):
     :return: true, if object has fallen, else false
     :rtype: bool
     """
+    current_time = time.time()
     # + 0.1 because there are some noises
     if((new_state[1].position.z + 0.1) < init_state[1].position.z):
+        return True
+    elif (time_start is not None) and (current_time - time_start) > 60:
+        print('time is up!(60s)')
         return True
     else:
         return False
@@ -282,6 +286,7 @@ for i in range(num_episodes):
     strategy_threshold = 1 - 1/(num_episodes - i)
     strategy = select_strategy(strategy_threshold)
     pull_parameters()
+    time_start = time.time()
     for actions_counter in count():
 
         # object state has to be transferred at here,
