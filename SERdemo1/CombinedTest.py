@@ -208,7 +208,7 @@ def compute_reward(old_state, new_state, init_state):
 
 
 def select_strategy(strategy_threshold):
-    """ select strategy (explore or exploit) for a given threshold 
+    """ select strategy (explore or exploit) for a given threshold
 
     :param strategy_threshold: probability threshold
     :type strategy_threshold: int
@@ -236,7 +236,7 @@ def check_done(new_state, init_state, time_start=None):
     # + 0.1 because there are some noises
     if((new_state[1].position.z + 0.1) < init_state[1].position.z):
         return True
-    elif (time_start is not None) and (current_time - time_start) > 60:
+    elif (time_start is not None) and (current_time - time_start) > 120:  # here change time out
         print('time is up!(60s)')
         return True
     else:
@@ -266,12 +266,35 @@ def transfer_action(current_joint_state, action):
     new_joint_state = current_joint_state
     return new_joint_state
 
+def training_process(learner):
+    criterion = RLbrain_v1.MyLoss()
+    transitions = memory.sample(memory.position)  # @@@@@ batch size of each update?
+    batch = Transition(*zip(*transitions))
+
+    state_batch = torch.stack(batch.state, dim=0)
+    action_batch = torch.stack(batch.action, dim=0)
+    reward_batch = torch.stack(batch.reward, dim=0)
+
+    q_pred = learner(state_batch)
+    # loss = criterion(q_pred,action_batch, RLbrain_v1.MyLoss.discount_and_norm_rewards(reward_batch))
+    loss = criterion(q_pred, action_batch, reward_batch)
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+    loss_dict.append(loss.item())
+    return
 
 robot = experiment_api.Robot()
 time.sleep(5)
 memory = ReplayMemory(10000)
 worker = Agent(num_actions=12)  # now num_action is 12, because each joint has two direction!
                                 #  actions transferred by transfer_action(current_joint_state, action)
+lr = 0.01
+learner = Agent(num_actions=12)
+# memory = ReplayMemory(10000)
+optimizer = optim.RMSprop(learner.parameters(), lr)
+loss_dict = []
 
 fast_test = False  # unable this, robot will perform act(0,-1,0,0,0,0) -> (0,-2,0,0,0,0) -> (-1,-2,0,0,0,0)
 
@@ -289,8 +312,10 @@ for i in range(num_episodes):
     # init_state = robot.get_current_state()  # @@@@ here using self.object_init_state!!
     state = init_state
     strategy_threshold = 1 - 1/(num_episodes - i)
+    strategy_threshold = 0
     strategy = select_strategy(strategy_threshold)
-    pull_parameters()
+    worker.load_state_dict(learner.state_dict())
+    # pull_parameters()
     time_start = time.time()
     for actions_counter in count():
 
@@ -342,10 +367,13 @@ for i in range(num_episodes):
         state = new_state
 
         if check_done(new_state, init_state, time_start):
-            send_exp()
+            # send_exp()
+            for i in range(3):
+                training_process(learner)
             break
 
-    send_exp()  # one game over, send the experience
+    # send_exp()  # one game over, send the experience
     print('number of actions in this round game:', actions_counter)
+    print(loss_dict)
 
 print(num_episodes, ' training over')

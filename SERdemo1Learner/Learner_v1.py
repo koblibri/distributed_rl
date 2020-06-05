@@ -13,7 +13,7 @@ try:
     import selectors
 except ImportError:
     import selectors2 as selectors   #run  python -m pip install selectors2
-host = '127.0.0.1'
+host = '192.168.0.5'
 port = 65432
 sel = selectors.DefaultSelector()
 

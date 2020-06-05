@@ -11,7 +11,8 @@ class Agent(nn.Module):
         super(Agent, self).__init__()
         self.num_actions = num_actions
         # 7 input state, how many? three, only x y z??
-        self.l1 = nn.Linear(9, 128)
+        self.l1 = nn.Linear(9, 64)
+        self.lt = nn.Linear(64, 128)
         self.l2 = nn.Linear(128, num_actions)
 
     def forward(self, x):
@@ -28,9 +29,11 @@ class Agent(nn.Module):
         # x = torch.tensor(parameters)
         x = self.l1(x)
         x = F.relu(x)
-        x = self.l2(x)
+        x = self.lt(x)
+        x = F.relu(x)
+        y = self.l2(x)
         # linear activation no extra function necessary
-        return x
+        return y
 
     def select_action(self, x):
         # print(x)
@@ -41,3 +44,25 @@ class Agent(nn.Module):
         # action = np.random.choice(prob_weights.shape[0], 1, p=prob_weights, replace=False)
         action = torch.multinomial(prob_weights, 1, replacement=False)
         return action
+
+
+class MyLoss(nn.Module):
+    def __init__(self):
+        super(MyLoss, self).__init__()
+        self.num_actions = 12
+
+    def forward(self, q_pred, true_action, discounted_reward):
+        # define the loss,
+        one_hot = torch.zeros(len(true_action), self.num_actions).scatter_(1, true_action, 1)
+        # print('true_action:', true_action)
+        # print('q_pred:', q_pred)
+        # print('one_hot:', one_hot)
+        neg_log_prob = torch.sum(-torch.log(F.softmax(q_pred, dim=1)) * one_hot, dim=1)
+        # print('neg_log_prob:', neg_log_prob)
+        loss = torch.mean(neg_log_prob * discounted_reward)
+        # print('loss :', loss )
+        return loss
+
+    def discount_and_norm_rewards(self, true_reward):
+        # to be done
+        return true_reward
