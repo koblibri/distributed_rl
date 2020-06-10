@@ -14,8 +14,7 @@ class Agent(nn.Module):
         self.l1 = nn.Linear(9, 128)
         self.l2 = nn.Linear(128, 128)
         self.l3 = nn.Linear(128, 64)
-        self.l4 = nn.Linear(64, 32)
-        self.l5 = nn.Linear(32, num_actions)
+        self.l4 = nn.Linear(64, num_actions)
 
     def forward(self, x):
         """forward pass for a robot state
@@ -35,9 +34,7 @@ class Agent(nn.Module):
         x = F.relu(x)
         x = self.l3(x)
         x = F.relu(x)
-        x = self.l4(x)
-        x = F.relu(x)
-        y = self.l5(x)
+        y = self.l4(x)
         # linear activation no extra function necessary
         return y
 
