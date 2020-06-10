@@ -11,9 +11,11 @@ class Agent(nn.Module):
         super(Agent, self).__init__()
         self.num_actions = num_actions
         # 7 input state, how many? three, only x y z??
-        self.l1 = nn.Linear(9, 64)
-        self.lt = nn.Linear(64, 128)
-        self.l2 = nn.Linear(128, num_actions)
+        self.l1 = nn.Linear(9, 128)
+        self.l2 = nn.Linear(128, 128)
+        self.l3 = nn.Linear(128, 64)
+        self.l4 = nn.Linear(64, 32)
+        self.l5 = nn.Linear(32, num_actions)
 
     def forward(self, x):
         """forward pass for a robot state
@@ -29,17 +31,22 @@ class Agent(nn.Module):
         # x = torch.tensor(parameters)
         x = self.l1(x)
         x = F.relu(x)
-        x = self.lt(x)
+        x = self.l2(x)
         x = F.relu(x)
-        y = self.l2(x)
+        x = self.l3(x)
+        x = F.relu(x)
+        x = self.l4(x)
+        x = F.relu(x)
+        y = self.l5(x)
         # linear activation no extra function necessary
         return y
 
     def select_action(self, x):
         # print(x)
         # parameters = list(x[0]) + [x[1].position.x, x[1].position.y, x[1].position.z]
-        prob_weights = F.softmax(self.forward(x), dim=0)
+        prob_weights = F.softmax(self.forward(x), dim=0).clamp(1e-10, 1)
         print(prob_weights)
+
         # action = np.random.sample(range(prob_weights.shape[0]), p=prob_weights) # @@@ maybe need transfer to list here
         # action = np.random.choice(prob_weights.shape[0], 1, p=prob_weights, replace=False)
         action = torch.multinomial(prob_weights, 1, replacement=False)

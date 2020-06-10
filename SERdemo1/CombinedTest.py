@@ -5,6 +5,7 @@ import time
 import experiment_api
 import RLbrain_v1
 from RLbrain_v1 import Agent
+import os
 
 import random
 import numpy as np
@@ -38,6 +39,8 @@ class ReplayMemory(object):
         self.capacity = capacity
         self.memory = []
         self.position = 0
+        self.core_memory = []
+        self.core_position = 0
 
     def push(self, *args):
         """saves a transition"""
@@ -46,8 +49,20 @@ class ReplayMemory(object):
         self.memory[self.position] = Transition(*args)
         self.position = (self.position + 1) % self.capacity
 
+    def push_core(self, *args):
+        """saves a transition"""
+        if len(self.core_memory) < self.capacity:
+            self.core_memory.append(None)
+        self.core_memory[self.position] = Transition(*args)
+        self.core_position = (self.core_position + 1) % self.capacity
+
     def sample(self, batch_size):
-        return random.sample(self.memory, batch_size)
+        this_batch_size = min(batch_size, self.position)
+        return random.sample(self.memory, this_batch_size)
+
+    def sample_core(self, batch_size):
+        this_batch_size = min(batch_size, self.core_position)
+        return random.sample(self.core_memory, this_batch_size)
 
     def clear(self):
         self.memory = []
@@ -124,28 +139,6 @@ def send_exp():  # socket send experience to learner
     return
 
 
-def check_stable_state(init_state=None):  # check done, roll&drop.
-    """checks if the object state and the robot state changed in the last 0.1 seconds
-    :return: True, if state did not change, False otherwise
-    :rtype: bool
-    """
-    eps = 0.001
-    _, object_old_state, robot_old_state = robot.get_current_state()
-    time.sleep(0.5)
-    _, object_new_state, robot_new_state = robot.get_current_state()
-    new_state = robot.get_current_state()
-
-    distance_object = get_distance(object_old_state, object_new_state)
-    distance_endeffector = get_distance(robot_old_state, robot_new_state)
-
-    # if distance < threashold: stable state
-    if distance_object < eps and distance_endeffector < eps:
-        return True
-    if (init_state is not None) and check_done(new_state, init_state):
-        return True
-    return False
-
-
 def get_position(state):
     """gets position of a state pose in a np.array
 
@@ -169,7 +162,6 @@ def get_distance(state_1, state_2):
 
 def compute_reward(old_state, new_state, init_state):
     """computes the reward for an actio nold_state -> new_state
-
     :param old_state: robot state before action
     :type old_state: ( _ ,geometry_msgs.msg._Pose.Pose)
     :param new_state: robot state after action
@@ -201,10 +193,9 @@ def compute_reward(old_state, new_state, init_state):
 
     # check if blue object was moved
     if(distance_change_object > eps):
-        extra += 10
+        extra += 20
 
-    return (1.0 / distance_real) + extra
-
+    return (2.0 /(1 + distance_real)) + extra
 
 
 def select_strategy(strategy_threshold):
@@ -222,6 +213,34 @@ def select_strategy(strategy_threshold):
     return strategy
 
 
+def check_stable_state(init_state=None):  # check done, roll&drop.
+    """checks if the object state and the robot state changed in the last 0.1 seconds
+    :return: True, if state did not change, False otherwise
+    :rtype: bool
+    """
+    eps = 0.001
+    _, object_old_state, robot_old_state = robot.get_current_state()
+    distance_init = get_distance(object_old_state, init_state[1])
+
+    time.sleep(0.5)
+    if init_state is not None and distance_init > eps:
+        time.sleep(1.5) # object's position changed, very likely to fall, give more patience, avoid error
+
+
+    _, object_new_state, robot_new_state = robot.get_current_state()
+    new_state = robot.get_current_state()
+
+    distance_object = get_distance(object_old_state, object_new_state)
+    distance_endeffector = get_distance(robot_old_state, robot_new_state)
+
+    # if distance < threashold: stable state
+    if distance_object < eps and distance_endeffector < eps:
+        return True
+    if (init_state is not None) and check_done(new_state, init_state):
+        return True
+    return False
+
+
 def check_done(new_state, init_state, time_start=None):
     """check, if robot is done (blue object fell from the table)
 
@@ -237,7 +256,7 @@ def check_done(new_state, init_state, time_start=None):
     if((new_state[1].position.z + 0.1) < init_state[1].position.z):
         return True
     elif (time_start is not None) and (current_time - time_start) > 120:  # here change time out
-        print('time is up!(60s)')
+        print('time is up!(120s)')
         return True
     else:
         return False
@@ -268,7 +287,7 @@ def transfer_action(current_joint_state, action):
 
 def training_process(learner):
     criterion = RLbrain_v1.MyLoss()
-    transitions = memory.sample(memory.position)  # @@@@@ batch size of each update?
+    transitions = memory.sample(batch_size)  # @@@@@ batch size of each update?
     batch = Transition(*zip(*transitions))
 
     state_batch = torch.stack(batch.state, dim=0)
@@ -291,16 +310,20 @@ memory = ReplayMemory(10000)
 worker = Agent(num_actions=12)  # now num_action is 12, because each joint has two direction!
                                 #  actions transferred by transfer_action(current_joint_state, action)
 lr = 0.01
+batch_size = 128
 learner = Agent(num_actions=12)
 # memory = ReplayMemory(10000)
 optimizer = optim.RMSprop(learner.parameters(), lr)
 loss_dict = []
+if os.path.exists('params.pkl'):
+    learner.load_state_dict(torch.load('params.pkl'))
 
 fast_test = False  # unable this, robot will perform act(0,-1,0,0,0,0) -> (0,-2,0,0,0,0) -> (-1,-2,0,0,0,0)
-
+batch_size = 128
 init_state = robot.get_current_state()
 
-num_episodes = 10  # 50 rounds of games
+
+num_episodes = 20  # 50 rounds of games
 for i in range(num_episodes):
     test = 0
     if fast_test is True:
@@ -311,9 +334,8 @@ for i in range(num_episodes):
         time.sleep(1)
     # init_state = robot.get_current_state()  # @@@@ here using self.object_init_state!!
     state = init_state
-    strategy_threshold = 1 - 1/(num_episodes - i)
-    strategy_threshold = 0
-    strategy = select_strategy(strategy_threshold)
+    #strategy_threshold = 1 - 1/(num_episodes - i)
+
     worker.load_state_dict(learner.state_dict())
     # pull_parameters()
     time_start = time.time()
@@ -325,6 +347,13 @@ for i in range(num_episodes):
         tensor_state = torch.Tensor(list_state)
         action = None
         new_joint_state = []
+
+        if i < 10:
+            strategy_threshold = 0.4
+        elif i >= 10:
+            strategy_threshold = 0.2
+        strategy = select_strategy(strategy_threshold)
+
         if strategy == 'exploit':
             # action = worker(state)
             action = int(worker.select_action(tensor_state))
@@ -352,6 +381,7 @@ for i in range(num_episodes):
             action = 5
 
         j1, j2, j3, j4, j5, j6 = new_joint_state
+        #robot.act(0,-2,0,0,0,0)
         robot.act(j1, j2, j3, j4, j5, j6)
 
         time.sleep(1)  # sleep wait for this action finished  @@@ to be done: speed up the robot joint!!!
@@ -359,17 +389,25 @@ for i in range(num_episodes):
             time.sleep(0.5)
         new_state = robot.get_current_state()
         reward = compute_reward(state, new_state, init_state)
+        print(reward)
 
         tensor_action = torch.LongTensor([action])
         tensor_reward = torch.Tensor([reward])
         memory.push(tensor_state, tensor_action, tensor_reward)
+        # if tensor_action > 20:
+        #     memory.push_core(tensor_state, tensor_action, tensor_reward)
 
         state = new_state
 
         if check_done(new_state, init_state, time_start):
             # send_exp()
-            for i in range(3):
+            if tensor_reward > 20:
+                epoch = 5
+            else:
+                epoch = 3
+            for i in range(epoch):
                 training_process(learner)
+            memory.clear()
             break
 
     # send_exp()  # one game over, send the experience
@@ -377,3 +415,4 @@ for i in range(num_episodes):
     print(loss_dict)
 
 print(num_episodes, ' training over')
+torch.save(learner.state_dict(), 'params.pkl')

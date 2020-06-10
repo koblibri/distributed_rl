@@ -71,7 +71,7 @@ class Robot:
                                                                     self.__current_state[0][1][1]):
             rospy.sleep(0.1)
         return self.__current_state[0][:-1][0], self.__get_pose_srv('BLUE_cylinder', 'world').pose, \
-               self.__get_pose_srv('robot', 'COL_COL_COL_VIS_VIS_VIS_VIS_VIS_VIS_VIS_VIS_VIS_hollie_real.006').pose
+               self.__get_pose_srv('robot', 'COL_COL_COL_VIS_VIS_VIS_VIS_VIS_VIS_VIS_VIS_VIS_hollie_real.018').pose
 
 
     def act(self, j1, j2, j3, j4, j5, j6):

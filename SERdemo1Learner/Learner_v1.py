@@ -91,6 +91,9 @@ def receive_exp(learner, data):
     # when receive experience from workers, call this
     # losses = []
     ReplayMemory.push(data)
+
+    # TODO: CORE memory, for games with large reward.
+
     for i in range(2):
         training_process(learner)
     # print(loss_dict)

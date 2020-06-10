@@ -9,17 +9,23 @@ class Agent(nn.Module):
     def __init__(self, num_actions):
         super(Agent, self).__init__()
         self.num_actions = num_actions
-        self.l1 = nn.Linear(9, 64)
-        self.lt = nn.Linear(64, 128)
-        self.l2 = nn.Linear(128, num_actions)
+        self.l1 = nn.Linear(9, 128)
+        self.l2 = nn.Linear(128, 128)
+        self.l3 = nn.Linear(128, 64)
+        self.l4 = nn.Linear(64, 32)
+        self.l5 = nn.Linear(32, num_actions)
 
     def forward(self, x):
         # x = torch.flatten(x)
         x = self.l1(x)
         x = F.relu(x)
-        x = self.lt(x)
+        x = self.l2(x)
         x = F.relu(x)
-        y = self.l2(x)
+        x = self.l3(x)
+        x = F.relu(x)
+        x = self.l4(x)
+        x = F.relu(x)
+        y = self.l5(x)
         # y = F.softmax(x)  # output the action-value(Qvalue) of each action  || maybe not need this softmax, just logit
         return y
 
