@@ -127,15 +127,12 @@ def pull_parameters():
 
 
 def send_exp():  # socket send experience to learner
-    # TODO: Enter new Experiences here
     exp = memory.sample(memory.position)
-    request = create_request("push", exp)  # here, experiences are Tensor, may cause bugs
+    request = create_request("push", exp)
     start_connection(host, port, request)
 
     wait_response()
-
     memory.clear()
-    # TODO: clear memory
     return
 
 
@@ -195,7 +192,7 @@ def compute_reward(old_state, new_state, init_state):
     if(distance_change_object > eps):
         extra += 20
 
-    return (2.0 /(1 + distance_real)) + extra
+    return (2.0 / (1 + distance_real)) + extra
 
 
 def select_strategy(strategy_threshold):
@@ -224,8 +221,8 @@ def check_stable_state(init_state=None):  # check done, roll&drop.
 
     time.sleep(0.5)
     if init_state is not None and distance_init > eps:
-        time.sleep(1.5) # object's position changed, very likely to fall, give more patience, avoid error
-
+        # object's position changed, very likely to fall, give more patience, avoid error
+        time.sleep(1.5)
 
     _, object_new_state, robot_new_state = robot.get_current_state()
     new_state = robot.get_current_state()
@@ -285,9 +282,11 @@ def transfer_action(current_joint_state, action):
     new_joint_state = current_joint_state
     return new_joint_state
 
+
 def training_process(learner):
     criterion = RLbrain_v1.MyLoss()
-    transitions = memory.sample(batch_size)  # @@@@@ batch size of each update?
+    transitions = memory.sample(batch_size)
+    print(transitions)  # @@@@@ batch size of each update?
     batch = Transition(*zip(*transitions))
 
     state_batch = torch.stack(batch.state, dim=0)
@@ -304,11 +303,13 @@ def training_process(learner):
     loss_dict.append(loss.item())
     return
 
+
 robot = experiment_api.Robot()
 time.sleep(5)
 memory = ReplayMemory(10000)
-worker = Agent(num_actions=12)  # now num_action is 12, because each joint has two direction!
-                                #  actions transferred by transfer_action(current_joint_state, action)
+# now num_action is 12, because each joint has two direction!
+worker = Agent(num_actions=12)
+#  actions transferred by transfer_action(current_joint_state, action)
 lr = 0.01
 batch_size = 128
 learner = Agent(num_actions=12)
@@ -318,7 +319,8 @@ loss_dict = []
 if os.path.exists('params.pkl'):
     learner.load_state_dict(torch.load('params.pkl'))
 
-fast_test = False  # unable this, robot will perform act(0,-1,0,0,0,0) -> (0,-2,0,0,0,0) -> (-1,-2,0,0,0,0)
+# unable this, robot will perform act(0,-1,0,0,0,0) -> (0,-2,0,0,0,0) -> (-1,-2,0,0,0,0)
+fast_test = False
 batch_size = 128
 init_state = robot.get_current_state()
 
@@ -343,7 +345,8 @@ for i in range(num_episodes):
 
         # object state has to be transferred at here,
         # because otherwise in Learner, we cannot parse state by state.position
-        list_state = list(state[0]) + [state[1].position.x, state[1].position.y, state[1].position.z]
+        list_state = list(state[0]) + [state[1].position.x,
+                                       state[1].position.y, state[1].position.z]
         tensor_state = torch.Tensor(list_state)
         action = None
         new_joint_state = []
@@ -368,23 +371,24 @@ for i in range(num_episodes):
             # for i in range(6):
             #     action.append(random.uniform(-3, 3))
         if(test == 1):
-            new_joint_state =[0,-1,0,0,0,0]
+            new_joint_state = [0, -1, 0, 0, 0, 0]
             test = 2
             action = 4
         elif(test == 2):
-            new_joint_state = [0,-2,0,0,0,0]
+            new_joint_state = [0, -2, 0, 0, 0, 0]
             test = 3
             action = 4
         elif(test == 3):
-            new_joint_state = [-1,-2,0,0,0,0]
+            new_joint_state = [-1, -2, 0, 0, 0, 0]
             test = 1
             action = 5
 
         j1, j2, j3, j4, j5, j6 = new_joint_state
-        #robot.act(0,-2,0,0,0,0)
+        # robot.act(0,-2,0,0,0,0)
         robot.act(j1, j2, j3, j4, j5, j6)
 
-        time.sleep(1)  # sleep wait for this action finished  @@@ to be done: speed up the robot joint!!!
+        # sleep wait for this action finished  @@@ to be done: speed up the robot joint!!!
+        time.sleep(1)
         while (not check_stable_state(init_state)):
             time.sleep(0.5)
         new_state = robot.get_current_state()

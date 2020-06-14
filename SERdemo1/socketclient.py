@@ -2,7 +2,7 @@ import sys
 try:
     import selectors
 except ImportError:
-    import selectors2 as selectors    
+    import selectors2 as selectors
 import io
 import struct
 
@@ -29,13 +29,13 @@ class Message:
         elif mode == "rw":
             events = selectors.EVENT_READ | selectors.EVENT_WRITE
         else:
-            raise ValueError("Invalid events mask mode %s." %(repr(mode)))
+            raise ValueError("Invalid events mask mode %s." % (repr(mode)))
         self.selector.modify(self.sock, events, data=self)
 
     def _read(self):
         try:
             # Should be ready to read
-            data = self.sock.recv(4096)
+            data = self.sock.recv(2048)
         except IOError:
             # Resource temporarily unavailable (errno EWOULDBLOCK)
             pass
@@ -47,7 +47,8 @@ class Message:
 
     def _write(self):
         if self._send_buffer:
-            print("sending", repr(self._send_buffer), "to", self.addr)
+            print("sending ", len(self._send_buffer),
+                  "bytes of data to", self.addr)
             try:
                 # Should be ready to write
                 sent = self.sock.send(self._send_buffer)
@@ -60,7 +61,7 @@ class Message:
     def _create_message(
         self, content_bytes, content_type, content_encoding
     ):
-        message_len_hdr = struct.pack(">H", len(content_bytes) )
+        message_len_hdr = struct.pack(">L", len(content_bytes))
         message_type_hdr = struct.pack(">B", content_type)
         message = message_len_hdr + message_type_hdr + content_bytes
         return message
@@ -68,14 +69,15 @@ class Message:
     def _process_response_binary_content(self):
         content = self.response
         # here maybe #TODO: receive new parameter data here
-        print("got response: %s" %( repr(content) ))
-        
+        print("got response: %s" % (repr(content)))
 
     def process_events(self, mask):
         if mask & selectors.EVENT_READ:
-            self.read()
+            parameters = self.read()
         if mask & selectors.EVENT_WRITE:
             self.write()
+            parameters = None
+        return parameters
 
     def read(self):
         self._read()
@@ -83,8 +85,17 @@ class Message:
         self.process_protoheader()
 
         if self.content_length:
-            self.process_response()
-
+            while True:
+                # print("Content Length:", self.content_length,
+                #       "Recieve buffer len: ", len(self._recv_buffer))
+                try:
+                    self._read()
+                except RuntimeError:
+                    if (self.content_length >= len(self._recv_buffer)):
+                        break
+                    else:
+                        raise RuntimeError
+        return self.process_response()
 
     def write(self):
         if not self._request_queued:
@@ -104,7 +115,7 @@ class Message:
         except Exception as e:
             print(
                 "error: selector.unregister() exception for %s: %s"
-                %( self.addr, repr(e) )
+                % (self.addr, repr(e))
             )
 
         try:
@@ -112,7 +123,7 @@ class Message:
         except OSError as e:
             print(
                 "error: socket.close() exception for %s: %s"
-                %( self.addr, repr(e) )
+                % (self.addr, repr(e))
             )
         finally:
             # Delete reference to socket object for garbage collection
@@ -124,51 +135,51 @@ class Message:
         content_encoding = self.request["encoding"]
         if content_type == "binary/pull":
             req = {
-                    "content_bytes": bytes([]),
-                    "content_type": 1,
-                    "content_encoding": content_encoding,
-                }
+                "content_bytes": bytes([]),
+                "content_type": 1,
+                "content_encoding": content_encoding,
+            }
         else:
             req = {
-                    "content_bytes": content,
-                    "content_type": 2,
-                    "content_encoding": content_encoding,
-                }    
+                "content_bytes": content,
+                "content_type": 2,
+                "content_encoding": content_encoding,
+            }
         message = self._create_message(**req)
         self._send_buffer += message
         self._request_queued = True
 
     def process_protoheader(self):
-        hdrlen = 3
+        hdrlen = 5
         if len(self._recv_buffer) >= hdrlen:
             self.content_length = struct.unpack(
-                ">H", self._recv_buffer[:2]
+                ">L", self._recv_buffer[:4]
             )[0]
             self.content_type = struct.unpack(
-                ">B", self._recv_buffer[2:3]
+                ">B", self._recv_buffer[4:5]
             )[0]
             self._recv_buffer = self._recv_buffer[hdrlen:]
 
     def process_response(self):
+        import Worker_v1  # Looks stupid, but circular dependencies...
         content_len = self.content_length
         if not len(self._recv_buffer) >= content_len:
             return
         data = self._recv_buffer[:content_len]
         self._recv_buffer = self._recv_buffer[content_len:]
+        parameters = None
         if self.content_type == 1:
             self.response = data
-            # TODO: Get data back to Worker
-            print(
-                "received %d response from %s"
-                %( self.content_type, self.addr)
-            )
-            self._process_response_binary_content()
+            print("received new parameters from ", self.addr)
+            #print ("data: %s", data)
+            parameters = data
         elif self.content_type == 3:
             # Binary or unknown content-type
-            print("Ack Recieved")
+            print("Ack Recieved: %s", data)
             self.response = data
-        else: 
+        else:
             # Binary or unknown content-type
             print("Error, unknown type")
         # Close when response has been processed
         self.close()
+        return parameters
