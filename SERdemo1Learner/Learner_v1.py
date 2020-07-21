@@ -18,7 +18,7 @@ try:
     import selectors
 except ImportError:
     import selectors2 as selectors  # run  python -m pip install selectors2
-host = '127.0.0.1'
+host = '172.19.0.1'
 port = 65432
 sel = selectors.DefaultSelector()
 
@@ -170,7 +170,7 @@ x = threading.Thread(target=learner_func, args=())
 
 learner = Learner()
 if os.path.exists('params.pkl'):
-    learner.agent.load_state_dict(torch.load('.pkl'))
+    learner.agent.load_state_dict(torch.load('params.pkl'))
 
 if __name__ == "__main__":
     # x.join()

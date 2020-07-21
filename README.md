@@ -1,3 +1,124 @@
+# How To: Run multiple Workers
+## Step 1: Run usual NRP installer script
+> ./nrp_installer install
+
+It should install the nrp container on 172.19.0.3:8080 and the frontend on 172.19.0.2:9000.
+
+Macs might be different!
+## Step 2: Run custom NRP installer script
+> ./custom_nrp_installer install
+
+This will set-up a second nrp container
+
+The container is called nrp2 and will run on 172.19.0.4:8080
+
+
+Edit the script for every additional container you want to run:
+
+    Go into the script and search & replace *all* "nrp2" instances to "nrp3". Repeat this process for additional containers (e.g. "nrp3" -> "nrp4" and so on).
+    You will also need to edit the IP assigned to the container. Do this in line 277 of the script.
+**Note**: The frontend is placed on 172.19.0.2 and the standard nrp backend container is on 172.19.0.3 so dont use these IPs.
+
+If you use 5 containers (nrp, nrp2, nrp3, nrp4, nrp5) you can use the start_stop_container.sh script to restart them. Useful after machine reboots or similar.
+
+Take note of all the IPs you assigned to the containers.
+## Step 3: Edit the frontend for service discovery
+Now attach to the frontend container (e.g. in Visual studio code or) with 
+> docker exec -it frontend bash
+
+Then find the file located in /home/bbpnrsoa/nrp/src/nrpBackendProxy/config.json and edit the "servers" object, so that the discovery service can find your backends.
+For me, it looks something like this: 
+
+>"servers": {
+    "172.19.0.3": {
+      "gzweb": {
+        "assets": "http://172.19.0.3:8080/assets",
+        "nrp-services": "http://172.19.0.3:8080",
+        "videoStreaming": "http://172.19.0.3:8080/webstream/",
+        "websocket": "ws://172.19.0.3:8080/gzbridge"
+      },
+      "rosbridge": {
+        "websocket": "ws://172.19.0.3:8080/rosbridge"
+      },
+      "serverJobLocation": "local"
+    },
+    "172.19.0.4": {
+      "gzweb": {
+        "assets": "http://172.19.0.4:8080/assets",
+        "nrp-services": "http://172.19.0.4:8080",
+        "videoStreaming": "http://172.19.0.4:8080/webstream/",
+        "websocket": "ws://172.19.0.4:8080/gzbridge"
+      },
+      "rosbridge": {
+        "websocket": "ws://172.19.0.4:8080/rosbridge"
+      },
+      "serverJobLocation": "local"
+    },
+    "172.19.0.5": {
+      "gzweb": {
+        "assets": "http://172.19.0.5:8080/assets",
+        "nrp-services": "http://172.19.0.5:8080",
+        "videoStreaming": "http://172.19.0.5:8080/webstream/",
+        "websocket": "ws://172.19.0.5:8080/gzbridge"
+      },
+      "rosbridge": {
+        "websocket": "ws://172.19.0.5:8080/rosbridge"
+      },
+      "serverJobLocation": "local"
+    },
+    "172.19.0.6": {
+      "gzweb": {
+        "assets": "http://172.19.0.6:8080/assets",
+        "nrp-services": "http://172.19.0.6:8080",
+        "videoStreaming": "http://172.19.0.6:8080/webstream/",
+        "websocket": "ws://172.19.0.6:8080/gzbridge"
+      },
+      "rosbridge": {
+        "websocket": "ws://172.19.0.6:8080/rosbridge"
+      },
+      "serverJobLocation": "local"
+    },
+    "172.19.0.7": {
+      "gzweb": {
+        "assets": "http://172.19.0.7:8080/assets",
+        "nrp-services": "http://172.19.0.7:8080",
+        "videoStreaming": "http://172.19.0.7:8080/webstream/",
+        "websocket": "ws://172.19.0.7:8080/gzbridge"
+      },
+      "rosbridge": {
+        "websocket": "ws://172.19.0.7:8080/rosbridge"
+      },
+      "serverJobLocation": "local"
+    }
+}
+
+Now, the container should be active and running (might have to restart the frontend).
+You can check if all services are discovered correctly by entering one of the backend containers
+> docker exec -it nrp bash
+
+> cle-virtual-coach python
+
+> from hbp_nrp_virtual_coach.virtual_coach import VirtualCoach
+
+> vc = VirtualCoach(environment='local', storage_username='nrpuser', storage_password='password')
+
+> vc.print_available_servers()
+
+## Step 4: Setup the experiments in all containers
+Use the run_exp.sh script to download requirements and the project for **each** container.
+
+> docker exec -i nrp bash < ~/Desktop/run_exp.sh && docker exec -it nrp bash
+
+This command will also enter the console of the container, where you will then have to install the experiment on local storage.
+
+> cd ~/distributed_rl_worker
+
+> python cle-virtual-coach start_experiment.py
+
+You can then run the worker as usually 
+> python Worker_v1.py
+
+
 # Distributed Reinforcement Learning Agent
 
 ## Installing packages with pip
