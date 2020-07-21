@@ -105,9 +105,9 @@ You can check if all services are discovered correctly by entering one of the ba
 > vc.print_available_servers()
 
 ## Step 4: Setup the experiments in all containers
-Use the run_exp.sh script to download requirements and the project for **each** container.
+Use the run_exp.sh script to download requirements and the project for **each** container (change nrp to nrp2 etc.)
 
-> docker exec -i nrp bash < ~/Desktop/run_exp.sh && docker exec -it nrp bash
+> docker exec -i nrp bash < run_exp.sh && docker exec -it nrp bash
 
 This command will also enter the console of the container, where you will then have to install the experiment on local storage.
 
