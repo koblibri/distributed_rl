@@ -4,33 +4,6 @@
 
 VERSION=1.16
 
-auto_update_script() {
-  set +e
-  scriptname=$1
-  echo -e "${BLUE}Checking for script updates${NC}"
-  wget --no-check-certificate https://neurorobotics-files.net/index.php/s/HQJzj8fywKN8oxZ/download -O /tmp/$scriptname 2>/dev/null
-  if [ -f /tmp/$scriptname -a -n ""`grep VERSION= /tmp/$scriptname | grep -v grep` ]; then
-    newversion=`grep VERSION= /tmp/$scriptname | grep -v grep | sed -n "s/[^=]*=\([0-9]*.*\)/\1/p"`
-    version_check $VERSION $newversion
-    check=$?
-    if [ "$check" -eq 9 ]; then
-      echo -e "${YELLOW}A newer recent of this script has been found. Update (recommended)? [y/n] ${NC}"
-      read yn
-      case $yn in
-        [Yy]* ) mv -f /tmp/$scriptname ./$scriptname
-                chmod 755 ./$scriptname
-                echo -e "${GREEN}$scriptname has been updated and will exit now. Just re-run it.${NC}"
-                exit
-                ;;
-        * ) ;;
-      esac
-    else
-      echo -e "${GREEN}$scriptname is up-to-date.${NC}"
-    fi
-  fi
-  set -e
-}
-
 restart() {
   container=$1
   echo -e "${BLUE}Restarting $container${NC}"
@@ -72,52 +45,125 @@ restore() {
 
 start(){
   container=$1
-  eval "port=\${${container}_port}"
-  eval "image=\${${container}_image}"
+  
+  if [ "${container}" == "frontend" ] 
+  then
+  	eval "image=\${frontend_image}"
+  	eval "port=\${${container}_port}"
+  	ipvar=$container"_ip"
+  	iparg=`eval $is_mac || echo --ip=${!ipvar}`
+  else
+    	eval "port=\${nrp_port}"
+  	eval "image=\${nrp_image}"
+  	backend_no=$(echo $container | cut -c 4-)
+  	curr_ip=${nrp_ips[$backend_no]}
+  	echo "NRP Container #$backend_no on IP $curr_ip:"
+  	iparg="--ip=$curr_ip"
+  fi
   #check_port $port
-  ipvar=$container"_ip"
+  
   echo -e "${BLUE}Starting $container container on port $port using image $image${NC}"
-  iparg=`eval $is_mac || echo --ip=${!ipvar}`
+  
   $DOCKER_CMD run -itd \
     -P \
     --net=nrpnet \
     $iparg \
-    -v nrp2_user_data:/home/bbpnrsoa/.opt/nrp2Storage \
-    -v nrp2_models:/home/bbpnrsoa/nrp/src/Models \
-    -v nrp2_experiments:/home/bbpnrsoa/nrp/src/Experiments \
+    -v "$container"_user_data:/home/bbpnrsoa/.opt/nrpStorage \
+    -v "$container"_models:/home/bbpnrsoa/nrp/src/Models \
+    -v "$container"_experiments:/home/bbpnrsoa/nrp/src/Experiments \
     --name $container $image
-  eval setup_$container
+  if [ "${container}" == "frontend" ] 
+    then
+  	eval setup_frontend
+    else
+  	eval setup_nrp $container
+  fi
   echo -e "${GREEN}$container container is now up and running.${NC}"
 }
 
 pull_images(){
-  #echo -e "${BLUE}Pulling frontend image, this may take a while..${NC}"
-  #$DOCKER_CMD pull hbpneurorobotics/nrp_frontend:dev
-  #echo -e "${GREEN}Successfully downloaded frontend image.${NC}"
-  echo -e "${BLUE}Pulling nrp2 image, this may take even longer..${NC}"
+  echo -e "${BLUE}Pulling frontend image, this may take a while..${NC}"
+  $DOCKER_CMD pull hbpneurorobotics/nrp_frontend:dev
+  echo -e "${GREEN}Successfully downloaded frontend image.${NC}"
+  echo -e "${BLUE}Pulling nrp image, this may take even longer..${NC}"
   $DOCKER_CMD pull hbpneurorobotics/nrp:dev
   echo -e "${GREEN}Successfully downloaded nrp image.${NC}"
   set +e
-  #$DOCKER_CMD network create -d bridge --subnet $subnet.0.0/16 --gateway $subnet.0.1 nrpnet
+  $DOCKER_CMD network create -d bridge --subnet $subnet.0.0/16 --gateway $subnet.0.1 nrpnet
   set -e
-  $DOCKER_CMD volume create nrp2_models
-  $DOCKER_CMD volume create nrp2_experiments
-  $DOCKER_CMD volume create nrp2_user_data
-  for container in nrp2
+  for ((i=0; i<num_backends; i++))
   do
-    if [[ $($DOCKER_CMD ps -a | grep -w $container$) ]]
-    then
-      echo -e "A $container container is already running."
-      restore $container
-    else
-      start $container
-    fi
+	curr_nrp=${nrp_backends[$i]}
+  	$DOCKER_CMD volume create $curr_nrp"_models"
+  	$DOCKER_CMD volume create $curr_nrp"_experiments"
+  	$DOCKER_CMD volume create $curr_nrp"_user_data"
+  	if [[ $($DOCKER_CMD ps -a | grep -w $curr_nrp$) ]]
+  	then
+      		echo -e "A $curr_nrp container is already running."
+      		restore $curr_nrp
+  	else
+      		start $curr_nrp
+  	fi
   done
+  if [[ $($DOCKER_CMD ps -a | grep -w frontend$) ]]
+    then
+      echo -e "A frontend container is already running."
+      restore frontend
+    else
+      start frontend
+  fi
   echo -e "${BLUE}Removing old unused images${NC}"
   $DOCKER_CMD system prune
   echo ""
+  #create config.json object for multiple backends
+  json='"servers": {'
+  for ((i=0; i<num_backends-1; i++))
+  do
+	curr_ip=${nrp_ips[$i]}
+	curr_backend=${nrp_backends[$i]}
+	echo $curr_backend : $curr_ip
+	json+='
+    "'$curr_ip'": {
+      "gzweb": {
+        "assets": "http://'$curr_ip':8080/assets",
+        "nrp-services": "http://'$curr_ip':8080",
+        "videoStreaming": "http://'$curr_ip':8080/webstream/",
+        "websocket": "ws://'$curr_ip':8080/gzbridge"
+      },
+      "rosbridge": {
+        "websocket": "ws://'$curr_ip':8080/rosbridge"
+      },
+      "serverJobLocation": "local"
+    },'
+	#echo $nrp_backends[$i] $nrp_ips[$i]	
+  done
+  curr_ip=${nrp_ips[$(($num_backends-1))]}
+	curr_backend=${nrp_backends[$(($num_backends-1))]}
+	echo $curr_backend : $curr_ip
+	json+='
+    "'$curr_ip'": {
+      "gzweb": {
+        "assets": "http://'$curr_ip':8080/assets",
+        "nrp-services": "http://'$curr_ip':8080",
+        "videoStreaming": "http://'$curr_ip':8080/webstream/",
+        "websocket": "ws://'$curr_ip':8080/gzbridge"
+      },
+      "rosbridge": {
+        "websocket": "ws://'$curr_ip':8080/rosbridge"
+      },
+      "serverJobLocation": "local"
+    }'
+  json+='}'
+  echo -e "${RED}Important: ${NC}
+Please edit the ${PURPLE}server ${NC}object of the config.json file located in ${PURPLE}nrp/src/nrpBackendProxy/config.json 
+  ${NC}to match the object generated in the file named ${PURPLE}custom_nrp_config.json ${NC}
+Then restart the frontend!
+To do this, attach to the running frontend-container with the command ${PURPLE}connect_frontend ${NC}and edit the file.
+Then use ${PURPLE}restart_frontend ${NC}to restart the frontend container and apply the changes you made."
+  echo $json > custom_nrp_config.json
   echo -e "${GREEN}
 Congratulations! The NRP platform is now installed on your computer.
+
 ${NC}
 You can check everything works by going to ${PURPLE}http://localhost:9000/#/esv-private ${NC}or if you used the --ip option: ${PURPLE}http://$external_frontend_ip:9000/#/esv-private ${NC}by using your browser and signing in with the following credentials:
 
@@ -125,34 +171,52 @@ username : nrpuser
 password : password
 
 If you need any help please use our forum: ${PURPLE}https://forum.humanbrainproject.eu/c/neurorobotics${NC}"
+
+
+
+
 }
 
-setup_nrp2(){
-  echo -e "${BLUE}Setting up nrp2 container${NC}"
-  $DOCKER_CMD exec nrp2 bash -c 'echo "127.0.0.1 $(uname -n)" | sudo tee --append /etc/hosts'
+setup_nrp(){
+  curr_nrp=$1
+  echo -e "${BLUE}Setting up $curr_nrp container${NC}"
+  $DOCKER_CMD exec $curr_nrp bash -c 'echo "127.0.0.1 $(uname -n)" | sudo tee --append /etc/hosts'
   set +e
   echo -e "${BLUE}Cloning template models, this may take a while${NC}"
-  $DOCKER_CMD exec nrp2 bash -c '{ cd /home/bbpnrsoa/nrp/src/Models && git config remote.origin.fetch "+refs/heads/master*:refs/remotes/origin/master*" && sudo git checkout master18 && sudo git pull; } || { cd /home/bbpnrsoa/nrp/src && sudo find Models/ -not -name "Models" -delete && sudo git clone --progress --branch=master18 https://bitbucket.org/hbpneurorobotics/Models.git Models/; }'
+  #Caching files for faster install
+  if [ "${curr_nrp}" == "nrp0" ]
+  then git clone --progress --branch=master18 https://bitbucket.org/hbpneurorobotics/Models.git ./Models
+  fi
+  $DOCKER_CMD cp ./Models $curr_nrp:/home/bbpnrsoa/nrp/src/
+  $DOCKER_CMD exec $curr_nrp bash -c '{ cd /home/bbpnrsoa/nrp/src/Models && git config remote.origin.fetch "+refs/heads/master*:refs/remotes/origin/master*" && sudo git checkout master18 && sudo git pull; }'
   echo -e "${BLUE}Cloning template experiments, this may take a while${NC}"
-  $DOCKER_CMD exec nrp2 bash -c '{ cd /home/bbpnrsoa/nrp/src/Experiments && git config remote.origin.fetch "+refs/heads/master*:refs/remotes/origin/master*" && sudo git checkout master18 && sudo git pull; } || { cd /home/bbpnrsoa/nrp/src && sudo find Experiments/ -not -name "Experiments" -delete && sudo git clone --progress --branch=master18 https://bitbucket.org/hbpneurorobotics/Experiments.git Experiments/; }'
-  $DOCKER_CMD exec nrp2 bash -c 'sudo chown -R bbpnrsoa:bbp-ext /home/bbpnrsoa/nrp/src/Experiments && sudo chown -R bbpnrsoa:bbp-ext /home/bbpnrsoa/nrp/src/Models'
+  if [ "${curr_nrp}" == "nrp0" ]
+  then git clone --progress --branch=master18 https://bitbucket.org/hbpneurorobotics/Experiments.git ./Experiments
+  fi
+  $DOCKER_CMD cp ./Experiments $curr_nrp:/home/bbpnrsoa/nrp/src/
+  $DOCKER_CMD exec $curr_nrp bash -c '{ cd /home/bbpnrsoa/nrp/src/Experiments && git config remote.origin.fetch "+refs/heads/master*:refs/remotes/origin/master*" && sudo git checkout master18 && sudo git pull; }'
+  $DOCKER_CMD exec $curr_nrp bash -c 'sudo chown -R bbpnrsoa:bbp-ext /home/bbpnrsoa/nrp/src/Experiments && sudo chown -R bbpnrsoa:bbp-ext /home/bbpnrsoa/nrp/src/Models'
   set -e
   echo -e "${BLUE}Setting rendering mode to CPU${NC}"
-  $DOCKER_CMD exec nrp2 bash -c '/home/bbpnrsoa/nrp/src/user-scripts/rendering_mode cpu'
+  $DOCKER_CMD exec $curr_nrp bash -c '/home/bbpnrsoa/nrp/src/user-scripts/rendering_mode cpu'
   echo -e "${BLUE}Generating low resolution textures${NC}"
-  $DOCKER_CMD exec nrp2 bash -c 'python /home/bbpnrsoa/nrp/src/user-scripts/generatelowrespbr.py'
-  $DOCKER_CMD exec nrp2 bash -c 'export NRP_MODELS_DIRECTORY=$HBP/Models && /home/bbpnrsoa/nrp/src/Models/create-symlinks.sh' 2>&1 | grep -v "HBP-NRP"
-  $DOCKER_CMD exec nrp2 bash -c "/bin/sed -e 's/localhost:9000/"$external_frontend_ip":9000/' -i /home/bbpnrsoa/nrp/src/ExDBackend/hbp_nrp_commons/hbp_nrp_commons/workspace/Settings.py"
-  $DOCKER_CMD exec nrp2 bash -c "/bin/sed -e 's/localhost:9000/"$external_frontend_ip":9000/' -i /home/bbpnrsoa/nrp/src/VirtualCoach/hbp_nrp_virtual_coach/hbp_nrp_virtual_coach/config.json"
-  $DOCKER_CMD exec nrp2 bash -c 'cd $HOME/nrp/src && source $HOME/.opt/platform_venv/bin/activate && pyxbgen -u Experiments/bibi_configuration.xsd -m bibi_api_gen && pyxbgen -u Experiments/ExDConfFile.xsd -m exp_conf_api_gen && pyxbgen -u Models/environment_model_configuration.xsd -m environment_conf_api_gen && pyxbgen -u Models/robot_model_configuration.xsd -m robot_conf_api_gen && deactivate' 2>&1 | grep -v "WARNING"
-  $DOCKER_CMD exec nrp2 bash -c 'gen_file_path=$HBP/ExDBackend/hbp_nrp_commons/hbp_nrp_commons/generated && filepaths=$HOME/nrp/src && sudo cp $filepaths/bibi_api_gen.py $gen_file_path &&  sudo cp $filepaths/exp_conf_api_gen.py $gen_file_path && sudo cp $filepaths/_sc.py $gen_file_path && sudo cp $filepaths/robot_conf_api_gen.py $gen_file_path && sudo cp $filepaths/environment_conf_api_gen.py $gen_file_path'
-  $DOCKER_CMD exec nrp2 bash -c "sudo /etc/init.d/supervisor start"
-  echo -e "${GREEN}Finished setting up nrp2 container.${NC}"
+  $DOCKER_CMD exec $curr_nrp bash -c 'python /home/bbpnrsoa/nrp/src/user-scripts/generatelowrespbr.py'
+  $DOCKER_CMD exec $curr_nrp bash -c 'export NRP_MODELS_DIRECTORY=$HBP/Models && /home/bbpnrsoa/nrp/src/Models/create-symlinks.sh' 2>&1 | grep -v "HBP-NRP"
+  $DOCKER_CMD exec $curr_nrp bash -c "/bin/sed -e 's/localhost:9000/"$external_frontend_ip":9000/' -i /home/bbpnrsoa/nrp/src/ExDBackend/hbp_nrp_commons/hbp_nrp_commons/workspace/Settings.py"
+  $DOCKER_CMD exec $curr_nrp bash -c "/bin/sed -e 's/localhost:9000/"$external_frontend_ip":9000/' -i /home/bbpnrsoa/nrp/src/VirtualCoach/hbp_nrp_virtual_coach/hbp_nrp_virtual_coach/config.json"
+  $DOCKER_CMD exec $curr_nrp bash -c 'cd $HOME/nrp/src && source $HOME/.opt/platform_venv/bin/activate && pyxbgen -u Experiments/bibi_configuration.xsd -m bibi_api_gen && pyxbgen -u Experiments/ExDConfFile.xsd -m exp_conf_api_gen && pyxbgen -u Models/environment_model_configuration.xsd -m environment_conf_api_gen && pyxbgen -u Models/robot_model_configuration.xsd -m robot_conf_api_gen && deactivate' 2>&1 | grep -v "WARNING"
+  $DOCKER_CMD exec $curr_nrp bash -c 'gen_file_path=$HBP/ExDBackend/hbp_nrp_commons/hbp_nrp_commons/generated && filepaths=$HOME/nrp/src && sudo cp $filepaths/bibi_api_gen.py $gen_file_path &&  sudo cp $filepaths/exp_conf_api_gen.py $gen_file_path && sudo cp $filepaths/_sc.py $gen_file_path && sudo cp $filepaths/robot_conf_api_gen.py $gen_file_path && sudo cp $filepaths/environment_conf_api_gen.py $gen_file_path'
+  $DOCKER_CMD exec $curr_nrp bash -c "sudo /etc/init.d/supervisor start"
+  echo -e "${GREEN}Finished setting up $curr_nrp container.${NC}"
 }
 
 setup_frontend() {
   $DOCKER_CMD exec frontend bash -c "/bin/sed -e 's/localhost/"$external_frontend_ip"/' -i /home/bbpnrsoa/nrp/src/ExDFrontend/dist/config.json"
-  $DOCKER_CMD exec frontend bash -c "/bin/sed -e \"s=localhost="$external_nrp2_ip"=\" -i /home/bbpnrsoa/nrp/src/nrpBackendProxy/config.json"
+  for ((i=0; i<num_backends; i++))
+  do
+	curr_ip=${nrp_ips[$i]}
+  	$DOCKER_CMD exec frontend bash -c "/bin/sed -e \"s=localhost="$curr_ip"=\" -i /home/bbpnrsoa/nrp/src/nrpBackendProxy/config.json"
+  done
   # Remove exit on fail, as if the user exists already we dont care.
   set +e
   $DOCKER_CMD exec frontend bash -c "source /home/bbpnrsoa/nrp/src/user-scripts/nrp_variables 2> /dev/null && /home/bbpnrsoa/nrp/src/user-scripts/add_new_database_storage_user -u nrpuser -p password -s > /dev/null 2>&1"
@@ -174,15 +238,19 @@ uninstall(){
   # Dont fail on errors
   set +e
   echo -e "${BLUE}Removing NRP docker images. This may take a while.${NC}"
-  $DOCKER_CMD stop nrp2
+  for ((i=0; i<num_backends; i++))
+  do
+	curr_nrp=${nrp_backends[$i]}
+  	$DOCKER_CMD stop $curr_nrp
+  	$DOCKER_CMD rm $curr_nrp
+  	$DOCKER_CMD rmi $($DOCKER_CMD images | grep -w hbpneurorobotics/nrp | awk '{print $3}')
+  	$DOCKER_CMD volume rm $curr_nrp"_models"
+  	$DOCKER_CMD volume rm $curr_nrp"_experiments"
+  done
   $DOCKER_CMD stop frontend
-  $DOCKER_CMD rm nrp2
   $DOCKER_CMD rm frontend
-  $DOCKER_CMD network rm nrp2net
-  $DOCKER_CMD rmi $($DOCKER_CMD images | grep -w hbpneurorobotics/nrp2 | awk '{print $3}')
+  $DOCKER_CMD network rm nrpnet
   $DOCKER_CMD rmi $($DOCKER_CMD images | grep -w hbpneurorobotics/nrp_frontend | awk '{print $3}')
-  $DOCKER_CMD volume rm nrp2_models
-  $DOCKER_CMD volume rm nrp2_experiments
   echo -e "${GREEN}NRP Docker images have been successfully removed.${NC}"
   set -e
   while true; do
@@ -194,8 +262,12 @@ uninstall(){
       * ) echo "Please answer yes or no.";;
     esac
   done
-  $DOCKER_CMD volume rm nrp2_user_data
-  echo -e "${BLUE}Removing NRP user data${NC}"
+  for ((i=0; i<num_backends; i++))
+  do
+	curr_nrp=${nrp_backends[$i]}
+  	$DOCKER_CMD volume rm $curr_nrp"_user_data"
+  	echo -e "${BLUE}Removing NRP user data${NC}"
+  done
   echo -e "${GREEN}All traces of the NRP images and user data have been sucessfully removed from your system.${NC}"
 }
 
@@ -261,27 +333,48 @@ elif uname -a | grep -q "Darwin"
 then
    is_mac=true;
 fi
-nrp2_port="8080"
-nrp2_image="hbpneurorobotics/nrp:dev"
+nrp_port="8080"
+nrp_image="hbpneurorobotics/nrp:dev"
 frontend_port="9000"
 frontend_image="hbpneurorobotics/nrp_frontend:dev"
 subnet="172.19"
 frontend_ip="172.19.0.2"
 
-#nrp_1_ip="172.19.0.3"
-#nrp_2_ip="172.19.0.4"
-#nrp_3_ip="172.19.0.5"
-#nrp_4_ip="172.19.0.6"
-#nrp_5_ip="172.19.0.7"
+
+nrp="nrp"
+nrp_name=nrp
+nrp_ip="172.19.0."
+nrp_base_ip=3
+echo "Start IP: "$nrp_ip$nrp_base_ip
+declare -A nrp_backends nrp_ips
+
+num_backends=8;
+
+nrp_backends[0]="nrp0"
+nrp_ips[0]="172.19.0.3"
+for ((i=1; i<num_backends; i++))
+do
+	nrp_backends[$i]=$nrp$i
+	#echo "$nrp_backends"
+	ip=$((nrp_base_ip+i))
+	nrp_ips[$i]=$nrp_ip$ip
+done
+
+#nrp_ip="172.19.0.3"
+#nrp1_ip="172.19.0.4"
+#nrp2_ip="172.19.0.5"
+#nrp3_ip="172.19.0.6"
+#nrp4_ip="172.19.0.7"
+#etc...
 
 #EDIT the IP below to whichever IP you want in your subnet!
-nrp2_ip="172.19.0.4"
+nrp_ip="172.19.0.3"
 
 external_frontend_ip=$frontend_ip
-external_nrp2_ip=$nrp2_ip
+external_nrp_ip=$nrp_ip
 DOCKER_CMD="docker"$exe
 CMD=""
-nrp2_proxy_ip="http://148.187.97.48"
+nrp_proxy_ip="http://148.187.97.48"
 #Colours
 RED="\033[01;31m"
 GREEN="\033[01;32m"
@@ -340,13 +433,18 @@ case $key in
     ;;
     -i|--ip)
       external_frontend_ip="$2"
-      external_nrp2_ip=$external_frontend_ip
+      external_nrp_ip=$external_frontend_ip
       shift
       shift
     ;;
 
     restart_backend)
-       CMD="restart nrp2"
+       for ((i=0; i<((num_backends-1));i++))
+       do
+       	curr_backend=${nrp_backends[$i]}
+       	CMD+="restart $curr_backend &&"
+       done
+       CMD+="restart ${nrp_backends[$(($num_backends-1))]}"
        shift
      ;;
     restart_frontend)
@@ -354,20 +452,31 @@ case $key in
        shift
      ;;
     restart)
-       CMD="restart nrp2 && restart nrp3 && restart nrp4 && restart nrp5 && restart frontend"
+       for ((i=0; i<num_backends;i++))
+       do
+       	curr_backend=${nrp_backends[$i]}
+       	CMD+="restart $curr_backend &&" 
+       done
+       CMD+="restart frontend"
        shift
      ;;
     start)
-       CMD="restart nrp2 && restart nrp3 && restart nrp4 && restart nrp5 && restart frontend"
+       for ((i=0; i<num_backends;i++))
+       do
+       	curr_backend=${nrp_backends[$i]}
+       	CMD+="restart $curr_backend &&" 
+       done
+       CMD+="restart frontend"
        shift
      ;;
     update)
-      set +e && curl -X POST ${nrp2_proxy_ip}/proxy/activity_log/update --max-time 10; set -e # logs each update event via the NRP proxy server
+      set +e && curl -X POST ${nrp_proxy_ip}/proxy/activity_log/update --max-time 10; set -e # logs each update event via the NRP proxy server
+      
       CMD="pull_images"
       shift
     ;;
     install)
-      set +e && curl -X POST ${nrp2_proxy_ip}/proxy/activity_log/install --max-time 10; set -e # logs each install event via the NRP proxy server
+      set +e && curl -X POST ${nrp_proxy_ip}/proxy/activity_log/install --max-time 10; set -e # logs each install event via the NRP proxy server
       CMD="pull_images"
       shift
     ;;
@@ -376,11 +485,22 @@ case $key in
       shift
     ;;
     stop)
-      CMD="stop nrp2 && stop frontend"
+      for ((i=0; i<num_backends;i++))
+       do
+       	curr_backend=${nrp_backends[$i]}
+       	CMD+="stop $curr_backend &&" 
+       done
+       CMD+="stop frontend"
+       shift
       shift
     ;;
     reset_backend)
-      CMD="restore nrp2"
+      for ((i=0; i<((num_backends-1));i++))
+       do
+       	curr_backend=${nrp_backends[$i]}
+       	CMD+="restore $curr_backend &&"
+       done
+       CMD+="restore ${nrp_backends[$(($num_backends-1))]}"
       shift
     ;;
     reset_frontend)
@@ -388,11 +508,16 @@ case $key in
       shift
     ;;
     reset)
-       CMD="restore nrp2 && restore frontend"
+       for ((i=0; i<num_backends;i++))
+       do
+       	curr_backend=${nrp_backends[$i]}
+       	CMD+="restore $curr_backend &&" 
+       done
+       CMD+="restore frontend"
        shift
      ;;
     connect_backend)
-      CMD="connect nrp2"
+      CMD="connect nrp"
       shift
     ;;
     connect_frontend)
@@ -416,7 +541,6 @@ then
   exit
 fi
 
-auto_update_script `basename $0`
 eval $CMD
 # Reset terminal colour back to normal
 echo -e "${NC}"
