@@ -155,8 +155,7 @@ pull_images(){
     }'
   json+='}'
   echo -e "${RED}Important: ${NC}
-Please edit the ${PURPLE}server ${NC}object of the config.json file located in ${PURPLE}nrp/src/nrpBackendProxy/config.json 
-  ${NC}to match the object generated in the file named ${PURPLE}custom_nrp_config.json ${NC}
+Please edit the ${PURPLE}server ${NC}object of the config.json file located in ${PURPLE}nrp/src/nrpBackendProxy/config.json ${NC}to match the object generated in the file named ${PURPLE}custom_nrp_config.json ${NC}
 Then restart the frontend!
 To do this, attach to the running frontend-container with the command ${PURPLE}connect_frontend ${NC}and edit the file.
 Then use ${PURPLE}restart_frontend ${NC}to restart the frontend container and apply the changes you made."
@@ -324,6 +323,70 @@ version_check() {
    fi
 }
 
+start_experiments() {
+  echo -e "${BLUE}Starting Local Learner${NC}"
+  if [ ! -e "./SERdemo1Learner/Learner.py" ] 
+  then
+ 	echo -e "${RED}[ERROR]Learner.py does not exist!${NC}"
+ 	exit
+  fi
+  learn_dir=$(readlink -f SERdemo1Learner/Learner.py)
+  thecmd="bash -c \"echo -e \\\"${BLUE}You are now in a new terminal responsible for the central learner\n${NC}\\\"; python2 $learn_dir\""
+  echo $thecmd
+  if [ -z ""`which gnome-terminal` ]
+  then
+    echo -e "${GREEN}No gnome-terminal installed. Defaulting to bash.${NC}"
+    bash -c "$thecmd"
+  else
+    gnome-terminal -e "$thecmd" &
+  fi
+  for ((i=0; i<num_backends; i++))
+  do
+	curr_backend=${nrp_backends[$i]}
+	echo $curr_backend
+	thecmd="bash -c \"echo -e \\\"${BLUE}You are now in a new terminal responsible for the worker $curr_backend\n${NC}\\\"; docker exec -it $curr_backend bash /home/bbpnrsoa/nrp/src/rl_worker/start.sh; \""
+	if [ -z ""`which gnome-terminal` ]
+  	then
+	    echo -e "${GREEN}No gnome-terminal installed. Defaulting to bash.${NC}"
+	    bash -c "$thecmd"
+	else
+	    gnome-terminal -e "$thecmd" &
+	fi
+  done
+  #python2 $learn_dir
+}
+
+setup_experiments() {
+  
+  if [ ! -d "./rl_worker" ] 
+  then
+  	echo -e "${BLUE}Distributed reinforcement learning experiment files not available!${NC}"
+  	exit
+  	#git clone --progress https://github.com/koblibri/rl_worker.git ./rl_worker
+  fi
+  echo -e "${BLUE}Copying distributed reinforcment learning experiment files to containers${NC}"
+  for ((i=0; i<num_backends; i++))
+  do
+	curr_backend=${nrp_backends[$i]}
+	echo $curr_backend
+	$DOCKER_CMD cp ./rl_worker $curr_backend:/home/bbpnrsoa/
+	$DOCKER_CMD exec $curr_backend bash -c 'pip install -r /home/bbpnrsoa/nrp/src/rl_worker/requirements.txt --no-cache-dir --progress-bar'
+	echo -e "${BLUE}DRL files installed on container $curr_backend ${NC}"
+  done
+  
+  echo -e "${BLUE}Installing local python requirements${NC}"
+  pip2 install -r ./rl_learner/requirements.txt --no-cache-dir --progress-bar
+
+  
+}
+
+#Colours
+RED="\033[01;31m"
+GREEN="\033[01;32m"
+PURPLE="\033[01;35m"
+BLUE="\033[01;34m"
+YELLOW="\033[01;33m"
+NC="\033[00m"
 #Fail on errors
 set -e
 
@@ -350,6 +413,11 @@ declare -A nrp_backends nrp_ips
 
 num_backends=8;
 
+if [ $num_backends -lt 1 ]
+then
+	echo -e "${RED}[ERROR] At least one container has to be installed. Please edit the num_backends to a number greater than zero!${NC}"
+	exit
+fi
 nrp_backends[0]="nrp0"
 nrp_ips[0]="172.19.0.3"
 for ((i=1; i<num_backends; i++))
@@ -375,13 +443,6 @@ external_nrp_ip=$nrp_ip
 DOCKER_CMD="docker"$exe
 CMD=""
 nrp_proxy_ip="http://148.187.97.48"
-#Colours
-RED="\033[01;31m"
-GREEN="\033[01;32m"
-PURPLE="\033[01;35m"
-BLUE="\033[01;34m"
-YELLOW="\033[01;33m"
-NC="\033[00m"
 
 usage="
 Usage: $(basename "$0") COMMAND
@@ -524,7 +585,14 @@ case $key in
       CMD="connect frontend"
       shift
     ;;
-
+    install_drl)
+      CMD="setup_experiments"
+      shift
+    ;;
+    start_experiment)
+      CMD="start_experiments"
+      shift
+    ;;  	
     *)
      echo "Unknown option \"$key\""
      echo -e "$usage"
