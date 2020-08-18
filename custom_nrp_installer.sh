@@ -248,6 +248,8 @@ uninstall(){
   done
   $DOCKER_CMD stop frontend
   $DOCKER_CMD rm frontend
+  $DOCKER_CMD volume rm "frontend_models"
+  $DOCKER_CMD volume rm "frontend_experiments"
   $DOCKER_CMD network rm nrpnet
   $DOCKER_CMD rmi $($DOCKER_CMD images | grep -w hbpneurorobotics/nrp_frontend | awk '{print $3}')
   echo -e "${GREEN}NRP Docker images have been successfully removed.${NC}"
@@ -265,6 +267,7 @@ uninstall(){
   do
 	curr_nrp=${nrp_backends[$i]}
   	$DOCKER_CMD volume rm $curr_nrp"_user_data"
+  	$DOCKER_CMD volume rm "frontend_user_data"
   	echo -e "${BLUE}Removing NRP user data${NC}"
   done
   echo -e "${GREEN}All traces of the NRP images and user data have been sucessfully removed from your system.${NC}"
