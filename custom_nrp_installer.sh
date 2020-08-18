@@ -183,13 +183,13 @@ setup_nrp(){
   set +e
   echo -e "${BLUE}Cloning template models, this may take a while${NC}"
   #Caching files for faster install
-  if [ "${curr_nrp}" == "nrp0" ]
+  if [ ! -d "./Models" ] 
   then git clone --progress --branch=master18 https://bitbucket.org/hbpneurorobotics/Models.git ./Models
   fi
   $DOCKER_CMD cp ./Models $curr_nrp:/home/bbpnrsoa/nrp/src/
   $DOCKER_CMD exec $curr_nrp bash -c '{ cd /home/bbpnrsoa/nrp/src/Models && git config remote.origin.fetch "+refs/heads/master*:refs/remotes/origin/master*" && sudo git checkout master18 && sudo git pull; }'
   echo -e "${BLUE}Cloning template experiments, this may take a while${NC}"
-  if [ "${curr_nrp}" == "nrp0" ]
+  if [ ! -d "./Experiments" ] 
   then git clone --progress --branch=master18 https://bitbucket.org/hbpneurorobotics/Experiments.git ./Experiments
   fi
   $DOCKER_CMD cp ./Experiments $curr_nrp:/home/bbpnrsoa/nrp/src/
@@ -369,8 +369,8 @@ setup_experiments() {
   do
 	curr_backend=${nrp_backends[$i]}
 	echo $curr_backend
-	$DOCKER_CMD cp ./rl_worker $curr_backend:/home/bbpnrsoa/
-	$DOCKER_CMD exec $curr_backend bash -c 'pip install -r /home/bbpnrsoa/nrp/src/rl_worker/requirements.txt --no-cache-dir --progress-bar'
+	$DOCKER_CMD cp ./rl_worker $curr_backend:/home/bbpnrsoa/nrp/src
+	$DOCKER_CMD exec $curr_backend bash -c 'pip install -r /home/bbpnrsoa/nrp/src/rl_worker/requirements.txt --no-cache-dir'
 	echo -e "${BLUE}DRL files installed on container $curr_backend ${NC}"
   done
   
