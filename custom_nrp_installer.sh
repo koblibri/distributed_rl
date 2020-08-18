@@ -325,12 +325,12 @@ version_check() {
 
 start_experiments() {
   echo -e "${BLUE}Starting Local Learner${NC}"
-  if [ ! -e "./SERdemo1Learner/Learner.py" ] 
+  if [ ! -e "./rl_learner/Learner.py" ] 
   then
  	echo -e "${RED}[ERROR]Learner.py does not exist!${NC}"
  	exit
   fi
-  learn_dir=$(readlink -f SERdemo1Learner/Learner.py)
+  learn_dir=$(readlink -f rl_learner/Learner.py)
   thecmd="bash -c \"echo -e \\\"${BLUE}You are now in a new terminal responsible for the central learner\n${NC}\\\"; python2 $learn_dir\""
   echo $thecmd
   if [ -z ""`which gnome-terminal` ]
@@ -370,14 +370,12 @@ setup_experiments() {
 	curr_backend=${nrp_backends[$i]}
 	echo $curr_backend
 	$DOCKER_CMD cp ./rl_worker $curr_backend:/home/bbpnrsoa/nrp/src
-	$DOCKER_CMD exec $curr_backend bash -c 'pip install -r /home/bbpnrsoa/nrp/src/rl_worker/requirements.txt --no-cache-dir'
+	$DOCKER_CMD exec $curr_backend bash -c 'pip install -r /home/bbpnrsoa/nrp/src/rl_worker/requirements.txt'
 	echo -e "${BLUE}DRL files installed on container $curr_backend ${NC}"
   done
   
   echo -e "${BLUE}Installing local python requirements${NC}"
-  pip2 install -r ./rl_learner/requirements.txt --no-cache-dir --progress-bar
-
-  
+  pip2 install -r ./rl_learner/requirements.txt --no-cache-dir
 }
 
 #Colours
