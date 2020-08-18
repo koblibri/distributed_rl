@@ -373,7 +373,7 @@ setup_experiments() {
 	curr_backend=${nrp_backends[$i]}
 	echo $curr_backend
 	$DOCKER_CMD cp ./rl_worker $curr_backend:/home/bbpnrsoa/nrp/src
-	$DOCKER_CMD exec $curr_backend bash -c 'pip install -r /home/bbpnrsoa/nrp/src/rl_worker/requirements.txt'
+	$DOCKER_CMD exec $curr_backend bash -c 'pip install -r /home/bbpnrsoa/nrp/src/rl_worker/requirements.txt --no-cache-dir'
 	echo -e "${BLUE}DRL files installed on container $curr_backend ${NC}"
   done
   
@@ -474,6 +474,9 @@ Commands:
     reset             Restores the backend and frontend containers
     connect_frontend  Connect to the frontend container (Opens in a new terminal)
     connect_backend   Connect to the backend container (Opens in a new terminal)
+    install_drl       Installs all the necessary files for the Distributed Reinforcement Learning	
+    start_experiment  Starts all experiments
+    
 
 ${BLUE}Please note:${NC}
 This script requires that the package 'docker' is already installed
@@ -579,7 +582,7 @@ case $key in
        shift
      ;;
     connect_backend)
-      CMD="connect nrp"
+      CMD="connect nrp0"
       shift
     ;;
     connect_frontend)
