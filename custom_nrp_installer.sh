@@ -82,6 +82,7 @@ start(){
 }
 
 pull_images(){
+  echo "Start IP: "$nrp_ip$nrp_base_ip
   echo -e "${BLUE}Pulling frontend image, this may take a while..${NC}"
   $DOCKER_CMD pull hbpneurorobotics/nrp_frontend:dev
   echo -e "${GREEN}Successfully downloaded frontend image.${NC}"
@@ -267,9 +268,9 @@ uninstall(){
   do
 	curr_nrp=${nrp_backends[$i]}
   	$DOCKER_CMD volume rm $curr_nrp"_user_data"
-  	$DOCKER_CMD volume rm "frontend_user_data"
   	echo -e "${BLUE}Removing NRP user data${NC}"
   done
+  $DOCKER_CMD volume rm "frontend_user_data"
   echo -e "${GREEN}All traces of the NRP images and user data have been sucessfully removed from your system.${NC}"
 }
 
@@ -409,7 +410,7 @@ nrp="nrp"
 nrp_name=nrp
 nrp_ip="172.19.0."
 nrp_base_ip=3
-echo "Start IP: "$nrp_ip$nrp_base_ip
+
 declare -A nrp_backends nrp_ips
 
 ##EDIT this line to set the number of parallel nrp-backends/robots
