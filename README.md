@@ -1,123 +1,90 @@
 # How To: Run multiple Workers
-## Step 1: Run usual NRP installer script
-> ./nrp_installer install
 
-It should install the nrp container on 172.19.0.3:8080 and the frontend on 172.19.0.2:9000.
+## Step 1: Set the number of NRP Backends
+Go into the *custom_nrp_installer.sh* script and edit **line 416** to a number greater than zero.
+This will set-up as many NRP-Backends as specified.
+## Step 2: Install NRP with the custom installer script
+> ./custom_nrp_installer.sh install
 
-Macs might be different!
-## Step 2: Run custom NRP installer script
-> ./custom_nrp_installer install
+This will pull the docker images for frontend and backend and copy experiments and model files to the NRP-backends. 
 
-This will set-up a second nrp container
+The frontend will be installed on 172.19.0.2:9000 and the backends will start with the IP 172.19.0.3:8080 (nrp0) and the IP increases with each added container.
+## Step 3: Edit the frontend service discovery
+One manual step is required: If the install succeded, in the end you will be asked to edit the service discovery configuration of the frontend container.
+To do this, go into the folder of the installer script and find the *custom_nrp_config.json*. Copy the content. 
+Then, connect to the frontend container, e.g. with VS Code, or on command line with 
+> docker exec -it frontend bash 
 
-The container is called nrp2 and will run on 172.19.0.4:8080
+Find the service-discovery config under *home/bbpnrsoa/nrp/src/nrpBackendProxy/config.json* and replace the *"server"* object with the content of *custom_nrp_config.json*. 
 
+It should then look similar to this (for 3 backends):
 
-Edit the script for every additional container you want to run:
-
-    Go into the script and search & replace *all* "nrp2" instances to "nrp3". Repeat this process for additional containers (e.g. "nrp3" -> "nrp4" and so on).
-    You will also need to edit the IP assigned to the container. Do this in line 277 of the script.
-**Note**: The frontend is placed on 172.19.0.2 and the standard nrp backend container is on 172.19.0.3 so dont use these IPs.
-
-If you use 5 containers (nrp, nrp2, nrp3, nrp4, nrp5) you can use the start_stop_container.sh script to restart them. Useful after machine reboots or similar.
-
-Take note of all the IPs you assigned to the containers.
-## Step 3: Edit the frontend for service discovery
-Now attach to the frontend container (e.g. in Visual studio code or) with 
-> docker exec -it frontend bash
-
-Then find the file located in /home/bbpnrsoa/nrp/src/nrpBackendProxy/config.json and edit the "servers" object, so that the discovery service can find your backends.
-For me, it looks something like this: 
-
->"servers": {
-    "172.19.0.3": {
-      "gzweb": {
-        "assets": "http://172.19.0.3:8080/assets",
-        "nrp-services": "http://172.19.0.3:8080",
-        "videoStreaming": "http://172.19.0.3:8080/webstream/",
-        "websocket": "ws://172.19.0.3:8080/gzbridge"
-      },
-      "rosbridge": {
-        "websocket": "ws://172.19.0.3:8080/rosbridge"
-      },
-      "serverJobLocation": "local"
-    },
-    "172.19.0.4": {
-      "gzweb": {
-        "assets": "http://172.19.0.4:8080/assets",
-        "nrp-services": "http://172.19.0.4:8080",
-        "videoStreaming": "http://172.19.0.4:8080/webstream/",
-        "websocket": "ws://172.19.0.4:8080/gzbridge"
-      },
-      "rosbridge": {
-        "websocket": "ws://172.19.0.4:8080/rosbridge"
-      },
-      "serverJobLocation": "local"
-    },
-    "172.19.0.5": {
-      "gzweb": {
-        "assets": "http://172.19.0.5:8080/assets",
-        "nrp-services": "http://172.19.0.5:8080",
-        "videoStreaming": "http://172.19.0.5:8080/webstream/",
-        "websocket": "ws://172.19.0.5:8080/gzbridge"
-      },
-      "rosbridge": {
-        "websocket": "ws://172.19.0.5:8080/rosbridge"
-      },
-      "serverJobLocation": "local"
-    },
-    "172.19.0.6": {
-      "gzweb": {
-        "assets": "http://172.19.0.6:8080/assets",
-        "nrp-services": "http://172.19.0.6:8080",
-        "videoStreaming": "http://172.19.0.6:8080/webstream/",
-        "websocket": "ws://172.19.0.6:8080/gzbridge"
-      },
-      "rosbridge": {
-        "websocket": "ws://172.19.0.6:8080/rosbridge"
-      },
-      "serverJobLocation": "local"
-    },
-    "172.19.0.7": {
-      "gzweb": {
-        "assets": "http://172.19.0.7:8080/assets",
-        "nrp-services": "http://172.19.0.7:8080",
-        "videoStreaming": "http://172.19.0.7:8080/webstream/",
-        "websocket": "ws://172.19.0.7:8080/gzbridge"
-      },
-      "rosbridge": {
-        "websocket": "ws://172.19.0.7:8080/rosbridge"
-      },
-      "serverJobLocation": "local"
-    }
+```sh
+{
+  "refreshInterval": 5000,
+  "auth": {
+    "renewInternal": 600000,
+    "clientId": "0dcfb392-32c7-480c-ae18-cbaf29e8a6b1",
+    "clientSecret": "<client_oidc_secret>",
+    "url": "https://services.humanbrainproject.eu/oidc",
+    "deactivate": true
+  },
+  "port": 8443,
+  "modelsPath": "$HBP/Models",
+  "experimentsPath": "$HBP/Experiments",
+  "servers": { 
+    "172.19.0.3": { "gzweb": { "assets": "http://172.19.0.3:8080/assets", "nrp-services": "http://172.19.0.3:8080", "videoStreaming": "http://172.19.0.3:8080/webstream/", "websocket": "ws://172.19.0.3:8080/gzbridge" }, "rosbridge": { "websocket": "ws://172.19.0.3:8080/rosbridge" }, "serverJobLocation": "local" }, 
+    "172.19.0.4": { "gzweb": { "assets": "http://172.19.0.4:8080/assets", "nrp-services": "http://172.19.0.4:8080", "videoStreaming": "http://172.19.0.4:8080/webstream/", "websocket": "ws://172.19.0.4:8080/gzbridge" }, "rosbridge": { "websocket": "ws://172.19.0.4:8080/rosbridge" }, "serverJobLocation": "local" }, 
+    "172.19.0.5": { "gzweb": { "assets": "http://172.19.0.5:8080/assets", "nrp-services": "http://172.19.0.5:8080", "videoStreaming": "http://172.19.0.5:8080/webstream/", "websocket": "ws://172.19.0.5:8080/gzbridge" }, "rosbridge": { "websocket": "ws://172.19.0.5:8080/rosbridge" }, "serverJobLocation": "local" }},
+  "storage": "FS",
+  "authentication": "FS",
+  "backendScripts": {
+    "restart-backend":
+      "$HBP/user-scripts/config_files/nrpBackendProxy/restart-backend.sh"
+  },
+  "activity-logs": {
+    "localfile": "/tmp/nrp_activity.log"
+  }
 }
+```
+Restart all containers to apply the changes made with 
+> ./custom_nrp_installer.sh restart
 
-Now, the container should be active and running (might have to restart the frontend).
+
+Now, the container should be active and running.
+
 You can check if all services are discovered correctly by entering one of the backend containers
-> docker exec -it nrp bash
+```sh
+$ docker exec -it nrp0 bash
+$ cle-virtual-coach python
+$ from hbp_nrp_virtual_coach.virtual_coach import VirtualCoach
+$ vc = VirtualCoach(environment='local', storage_username='nrpuser', storage_password='password')
+$ vc.print_available_servers()
+```
+## Step 4: Install the Distributed Reinforcement Learning (DRL) files
+The last setup-step is to copy the custom experiment and worker files to the respective backends. To do this, use the command
 
-> cle-virtual-coach python
+> ./custom_nrp_installer.sh install_drl
 
-> from hbp_nrp_virtual_coach.virtual_coach import VirtualCoach
+This may take a while, since it also has to individually install all python requirments (e.g. pytorch).
 
-> vc = VirtualCoach(environment='local', storage_username='nrpuser', storage_password='password')
+It will also install the requirements for the local learner.
 
-> vc.print_available_servers()
+## Step 5: Start the DRL-Experiment
+Start all robots with
 
-## Step 4: Setup the experiments in all containers
-Use the run_exp.sh script to download requirements and the project for **each** container (change nrp to nrp2 etc.)
+> ./custom_nrp_installer.sh start_experiment
 
-> docker exec -i nrp bash < run_exp.sh && docker exec -it nrp bash
+This will open an individual terminal for the central learner and for each nrp-backend.
+You can then monitor the experiment in the terminals or viewing the simulation in the standard NRP-website on [172.19.0.2:9000/#/esv-private](172.19.0.2:9000/#/esv-private).
 
-This command will also enter the console of the container, where you will then have to install the experiment on local storage.
+Close any experiment/window with CTRL-C. Restart / stop everything with 
+> ./custom_nrp_installer.sh restart
 
-> cd ~/distributed_rl_worker
+or
+> ./custom_nrp_installer.sh stop
 
-> python cle-virtual-coach start_experiment.py
-
-You can then run the worker as usually 
-> python Worker_v1.py
-
+to make sure the IPs and NRP-Backendservers are not occupied by any containers not closed properly.
 
 # Distributed Reinforcement Learning Agent
 

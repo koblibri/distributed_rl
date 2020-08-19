@@ -328,12 +328,12 @@ version_check() {
 
 start_experiments() {
   echo -e "${BLUE}Starting Local Learner${NC}"
-  if [ ! -e "./rl_learner/Learner.py" ] 
+  if [ ! -e "./rl_learner/Learner_v1.py" ] 
   then
  	echo -e "${RED}[ERROR]Learner.py does not exist!${NC}"
  	exit
   fi
-  learn_dir=$(readlink -f rl_learner/Learner.py)
+  learn_dir=$(readlink -f rl_learner/Learner_v1.py)
   thecmd="bash -c \"echo -e \\\"${BLUE}You are now in a new terminal responsible for the central learner\n${NC}\\\"; python2 $learn_dir\""
   echo $thecmd
   if [ -z ""`which gnome-terminal` ]
@@ -347,7 +347,7 @@ start_experiments() {
   do
 	curr_backend=${nrp_backends[$i]}
 	echo $curr_backend
-	thecmd="bash -c \"echo -e \\\"${BLUE}You are now in a new terminal responsible for the worker $curr_backend\n${NC}\\\"; docker exec -it $curr_backend bash /home/bbpnrsoa/nrp/src/rl_worker/start.sh; \""
+	thecmd="bash -c \"echo -e \\\"${BLUE}You are now in a new terminal responsible for the worker $curr_backend\n${NC}\\\"; docker exec -it $curr_backend bash /home/bbpnrsoa/nrp/src/rl_worker/start.sh; read line;\""
 	if [ -z ""`which gnome-terminal` ]
   	then
 	    echo -e "${GREEN}No gnome-terminal installed. Defaulting to bash.${NC}"
@@ -355,8 +355,8 @@ start_experiments() {
 	else
 	    gnome-terminal -e "$thecmd" &
 	fi
+	sleep 4
   done
-  #python2 $learn_dir
 }
 
 setup_experiments() {
@@ -412,6 +412,7 @@ nrp_base_ip=3
 echo "Start IP: "$nrp_ip$nrp_base_ip
 declare -A nrp_backends nrp_ips
 
+##EDIT this line to set the number of parallel nrp-backends/robots
 num_backends=8;
 
 if [ $num_backends -lt 1 ]
@@ -474,7 +475,7 @@ Commands:
     reset             Restores the backend and frontend containers
     connect_frontend  Connect to the frontend container (Opens in a new terminal)
     connect_backend   Connect to the backend container (Opens in a new terminal)
-    install_drl       Installs all the necessary files for the Distributed Reinforcement Learning	
+    install_drl       Installs all the necessary files for the Distributed Reinforcement Learning Experiment
     start_experiment  Starts all experiments
     
 
