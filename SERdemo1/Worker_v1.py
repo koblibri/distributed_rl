@@ -32,7 +32,7 @@ port = 65432
 # if gpu is to be used
 device = torch.device('cuda')
 
-Transition = namedtuple('Transition', ('state', 'action', 'reward'))
+Transition = namedtuple('Transition', ('state', 'action', 'reward', 'done', 'logits'))
 
 
 class ReplayMemory(object):
@@ -63,12 +63,13 @@ class ReplayMemory(object):
 
 class Worker():
 
-    def __init__(self, mem_size=10000, num_actions=12, discount_factor=0.6):
+    def __init__(self, mem_size=10000, num_actions=12, discount_factor=0.8):
         self.replay_memory = ReplayMemory(mem_size)
         # now num_action is 12, because each joint has two direction!
-        self.agent = Agent(num_actions=num_actions)
+        self.agent = Agent(isactor=True)
         self.discount_factor = discount_factor
         self.robot = experiment_api.Robot()
+        self.num_actions = num_actions
         time.sleep(5)
 
     def create_request(self, action, value):
@@ -131,7 +132,7 @@ class Worker():
         self.agent.load_state_dict(new_state_dict)
 
     def send_exp(self):  # socket send experience to learner
-        self.update_reward()
+        # self.update_reward()
         experiences = self.replay_memory.memory
         send_exp = map(lambda x: x._asdict(), experiences)
         serialized_exp = pickle.dumps(send_exp)
@@ -233,7 +234,7 @@ class Worker():
             strategy = 'explore'
         return strategy
 
-    def check_done(self, new_state, init_state, time_start=None):
+    def check_done(self, new_state, init_state, actions_counter=None):
         """check, if robot is done (blue object fell from the table)
 
         :param new_state: robot state after action
@@ -243,15 +244,16 @@ class Worker():
         :return: true, if object has fallen, else false
         :rtype: bool
         """
-        current_time = time.time()
+        # current_time = time.time()
         # + 0.1 because there are some noises
         if((new_state[1].position.z + 0.1) < init_state[1].position.z):
             return True
-        elif (time_start is not None) and (current_time - time_start) > 180:
-            print('time is up!(120s)')
+        elif (actions_counter is not None) and actions_counter >= 19:
+            print('20 steps done, game over')
             return True
         else:
             return False
+
 
     def update_reward(self):
         """updates reward with discounted rewards 
@@ -274,6 +276,7 @@ class Worker():
             self.replay_memory.memory[-(idx+1)] = Transition(
                 transition.state, transition.action, reward)
 
+
     def transfer_action(self, current_joint_state, action):
         """ transfer action from {0-11} to {-6,...,-1, 1,...,6},
             where +6: joint6 +1, -6: joint6 -1,
@@ -293,7 +296,7 @@ class Worker():
         action -= 5
         if action <= 0:
             action -= 1
-        print(action)
+        print('action:', action)
         act_joint_num = np.abs(action) - 1
         current_joint_state[int(act_joint_num)] += np.sign(action)
         new_joint_state = current_joint_state
@@ -302,7 +305,22 @@ class Worker():
     def run(self):
         # unable this, robot will perform act(0,-1,0,0,0,0) -> (0,-2,0,0,0,0) -> (-1,-2,0,0,0,0)
         fast_test = False
-        init_state = self.robot.get_current_state()
+
+        # TODO: here we could randomize initial state (in episodes)
+        bare_state = self.robot.get_current_state()
+        list_state = list(bare_state[0]) + [bare_state[1].position.x, bare_state[1].position.y, bare_state[1].position.z]
+        tensor_state = torch.Tensor(list_state)
+
+        init_action = torch.zeros((1, 1), dtype=torch.float32)
+        # init_action = torch.zeros(1, dtype=torch.float32)
+        init_reward = torch.tensor(0, dtype=torch.float32).view(1, 1)
+        # init_reward = torch.tensor(0, dtype=torch.float32)
+        init_logits = torch.zeros((1, self.num_actions), dtype=torch.float32)
+        init_core_state = None
+        init_done = torch.tensor(True, dtype=torch.bool).view(1, 1)
+        # init_done = torch.tensor(True, dtype=torch.bool)
+        init_worker = (bare_state, tensor_state, init_action, init_reward, init_done, init_logits, init_core_state)
+
         test = 0
         if fast_test is True:
             test = 1
@@ -313,43 +331,54 @@ class Worker():
             #    test = 1
             self.robot.reset()
             time.sleep(2)
-            # init_state = self.robot.get_current_state()
+            
+            # TODO: here we could randomize initial state
+            bare_state, tensor_state, action, reward, done, logits, core_state = init_worker
+            init_state = bare_state
             while (not self.check_stable_state(init_state)):
                 time.sleep(1)
-            # should be set after robot is reset
-            state = init_state
-            # strategy_threshold = 1 - 1/(num_episodes - i)
-            # strategy = self.select_strategy(strategy_threshold)
+            bare_state = init_state
+
+            # push init states, to make learner&worker start from the same init settings
             self.pull_parameters()
-            time_start = time.time()
-            for actions_counter in count():
+            print('episode: ', i)
+            # print('log', logits.shape)
+            self.replay_memory.push(tensor_state, action, reward, done, logits.detach())
+
+            # self.pull_parameters()
+            # time_start = time.time()
+
+            for actions_counter in count():  # number of actions
 
                 # object state has to be transferred at here,
-                # because otherwise in Learner, we cannot parse state by state.position
-                list_state = list(
-                    state[0]) + [state[1].position.x, state[1].position.y, state[1].position.z]
-                tensor_state = torch.Tensor(list_state)
-                action = None
+                # otherwise in Learner, we cannot parse state by state.position
+
+                # list_state = list(
+                #     bare_state[0]) + [bare_state[1].position.x, bare_state[1].position.y, bare_state[1].position.z]
+                # tensor_state = torch.Tensor(list_state)
+                # action = None
                 new_joint_state = []
 
                 if i < 10:
-                    strategy_threshold = 0.01
+                    strategy_threshold = 0.5
                 elif i >= 10:
-                    strategy_threshold = 0.01
+                    strategy_threshold = 0.2
                 strategy = self.select_strategy(strategy_threshold)
 
                 if strategy == 'exploit':
                     # action = worker(state)
-                    action = int(self.agent.select_action(tensor_state))
-                    current_joint_state = list(state[0])
-                    new_joint_state = self.transfer_action(
-                        current_joint_state, action)
-                else:
+                    print('exploit')
+                    action, logits, core_state = self.agent(tensor_state, action, reward, core_state, isactor=True)
+
+                    current_joint_state = list(bare_state[0])
+                    new_joint_state = self.transfer_action(current_joint_state, action.item())
+
+                elif strategy == 'explore':
+                    print('explore')
                     random.seed(time.time())
-                    action = random.uniform(0, 11)
-                    current_joint_state = list(state[0])
-                    new_joint_state = self.transfer_action(
-                        current_joint_state, action)
+                    action = random.randint(0, 11)
+                    current_joint_state = list(bare_state[0])
+                    new_joint_state = self.transfer_action(current_joint_state, action)
 
                     # for i in range(6):
                     #     action.append(random.uniform(-3, 3))
@@ -364,7 +393,7 @@ class Worker():
                 elif(test == 3):
                     new_joint_state = [-1, -2, 0, 0, 0, 0]
                     test = 0
-                    fast_test = False
+                    # fast_test = False
                     action = 5
 
                 j1, j2, j3, j4, j5, j6 = new_joint_state
@@ -375,16 +404,25 @@ class Worker():
                 while (not self.check_stable_state(init_state)):
                     time.sleep(0.5)
                 new_state = self.robot.get_current_state()
-                reward = self.compute_reward(state, new_state, init_state)
-                print(reward)
-                tensor_action = torch.LongTensor([action])
-                tensor_reward = torch.Tensor([reward])
-                self.replay_memory.push(
-                    tensor_state, tensor_action, tensor_reward)
+                reward = self.compute_reward(bare_state, new_state, init_state)
+                print('reward:', reward)
+                print('logits', logits)
+                action = torch.Tensor([action]).view(1, 1)
+                reward = torch.Tensor([reward]).view(1, 1)
 
-                state = new_state
 
-                if self.check_done(new_state, init_state, time_start):
+                bare_state = new_state
+
+                list_state = list(
+                    bare_state[0]) + [bare_state[1].position.x, bare_state[1].position.y, bare_state[1].position.z]
+                tensor_state = torch.Tensor(list_state)
+
+                done = self.check_done(new_state, init_state, actions_counter)
+                done = torch.tensor(done, dtype=torch.bool).view(1, 1)
+                # print('log', logits.shape)
+                self.replay_memory.push(tensor_state, action, reward, done, logits.detach())
+
+                if done:
                     break
 
             self.send_exp()  # one game over, send the experience
