@@ -13,7 +13,7 @@ class Agent(nn.Module):
         self.lstm_hidden = lstm_hidden
         self.l1 = nn.Linear(input_size, 128)
         self.l2 = nn.Linear(128, 256)
-        self.l3 = nn.Linear(256, fc_size - 2)
+        self.l3 = nn.Linear(256, fc_size - 13)
 
         self.lstm = nn.LSTMCell(fc_size, lstm_hidden)
         # batch_first=True: the input and output tensors are provided as (batch, seq, feature)
@@ -40,7 +40,8 @@ class Agent(nn.Module):
             batch_size = x.shape[1]
 
         x = x.view(seq_len, batch_size, -1)
-        action = action.view(seq_len, batch_size, -1)
+        action = F.one_hot(action.long(), num_classes=self.num_actions)
+        action = action.view(seq_len, batch_size, -1).to(torch.float32)
         reward = reward.view(seq_len, batch_size, -1)
         # print('x.shape', x.shape)
         # print('action.shape', action.shape)

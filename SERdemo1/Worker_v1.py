@@ -292,11 +292,12 @@ class Worker():
         :return: new_joint_state, the new robot joint values, after transferred to j1,j2,j3..., can be used in robot.act()
         :rtype: list
         """
-        
+        # print('raw action:', action)
         action -= 5
         if action <= 0:
             action -= 1
-        print('action:', action)
+        # print('action:', action)
+        print('transferred action:', action)
         act_joint_num = np.abs(action) - 1
         current_joint_state[int(act_joint_num)] += np.sign(action)
         new_joint_state = current_joint_state
@@ -360,9 +361,9 @@ class Worker():
                 new_joint_state = []
 
                 if i < 10:
-                    strategy_threshold = 0.5
+                    strategy_threshold = 0.05
                 elif i >= 10:
-                    strategy_threshold = 0.2
+                    strategy_threshold = 0.05
                 strategy = self.select_strategy(strategy_threshold)
 
                 if strategy == 'exploit':
@@ -392,7 +393,7 @@ class Worker():
                     action = 4
                 elif(test == 3):
                     new_joint_state = [-1, -2, 0, 0, 0, 0]
-                    test = 0
+                    test = 1
                     # fast_test = False
                     action = 5
 
@@ -406,7 +407,7 @@ class Worker():
                 new_state = self.robot.get_current_state()
                 reward = self.compute_reward(bare_state, new_state, init_state)
                 print('reward:', reward)
-                print('logits', logits)
+                print('logits:', logits)
                 action = torch.Tensor([action]).view(1, 1)
                 reward = torch.Tensor([reward]).view(1, 1)
 
@@ -426,7 +427,7 @@ class Worker():
                     break
 
             self.send_exp()  # one game over, send the experience
-            print('number of actions in this round game:', actions_counter)
+            print('number of actions in this round game:', actions_counter+1)
         print(num_episodes, ' training over')
         sel.close()  # cleanup the selector as every experiences are sent
 
