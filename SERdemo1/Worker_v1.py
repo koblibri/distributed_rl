@@ -132,7 +132,7 @@ class Worker():
         self.agent.load_state_dict(new_state_dict)
 
     def send_exp(self):  # socket send experience to learner
-        # self.update_reward()
+        #self.update_reward()
         experiences = self.replay_memory.memory
         send_exp = map(lambda x: x._asdict(), experiences)
         serialized_exp = pickle.dumps(send_exp)
@@ -204,7 +204,7 @@ class Worker():
 
         distance_old = self.get_distance(object_old, endeffector_old)
         distance_new = self.get_distance(object_new, endeffector_new)
-        distance_real = self.get_distance(object_old, endeffector_new)
+        distance_real = self.get_distance(object_new, endeffector_new)
         distance_change_object = self.get_distance(object_old, object_new)
 
         z_init = init_object.position.z
@@ -218,6 +218,8 @@ class Worker():
         if(distance_change_object > eps):
             return 20
 
+        print("Distance")
+        print(distance_real)
         return 2.0 /( 1 + distance_real)
 
     def select_strategy(self, strategy_threshold):
@@ -325,7 +327,7 @@ class Worker():
         test = 0
         if fast_test is True:
             test = 1
-        num_episodes = 30  # 50 rounds of games
+        num_episodes = 20  # 50 rounds of games
         for i in range(num_episodes):
             # test = 0
             #if fast_test is True:
@@ -338,6 +340,7 @@ class Worker():
             init_state = bare_state
             while (not self.check_stable_state(init_state)):
                 time.sleep(1)
+            self.robot.reset_object()
             bare_state = init_state
 
             # push init states, to make learner&worker start from the same init settings
@@ -360,10 +363,8 @@ class Worker():
                 # action = None
                 new_joint_state = []
 
-                if i < 10:
-                    strategy_threshold = 0.05
-                elif i >= 10:
-                    strategy_threshold = 0.05
+                strategy_threshold = 1 - (float(i) / num_episodes)
+                strategy_threshold = 0.2
                 strategy = self.select_strategy(strategy_threshold)
 
                 if strategy == 'exploit':
@@ -377,6 +378,7 @@ class Worker():
                 elif strategy == 'explore':
                     print('explore')
                     random.seed(time.time())
+                    action, logits, core_state = self.agent(tensor_state, action, reward, core_state, isactor=True)
                     action = random.randint(0, 11)
                     current_joint_state = list(bare_state[0])
                     new_joint_state = self.transfer_action(current_joint_state, action)
@@ -423,10 +425,13 @@ class Worker():
                 # print('log', logits.shape)
                 self.replay_memory.push(tensor_state, action, reward, done, logits.detach())
 
+                if self.replay_memory.position == 20:
+                    self.send_exp()  # after 20 steps, send the trajectory
+
                 if done:
                     break
 
-            self.send_exp()  # one game over, send the experience
+            # self.send_exp()  # one game over, send the experience
             print('number of actions in this round game:', actions_counter+1)
         print(num_episodes, ' training over')
         sel.close()  # cleanup the selector as every experiences are sent

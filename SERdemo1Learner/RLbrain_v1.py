@@ -93,7 +93,7 @@ class Head(nn.Module):
     def forward(self, x):
         policy_logits = self.actor_linear(x)
         baseline = self.critic_linear(x)
-        prob_weights = F.softmax(policy_logits, dim=0).clamp(1e-10, 1)
+        prob_weights = F.softmax(policy_logits, dim=1).clamp(1e-10, 1)
         # print(prob_weights)
 
         new_action = torch.multinomial(prob_weights, 1, replacement=True)
@@ -137,56 +137,3 @@ class MyLoss(nn.Module):
         return torch.mean(policy_gradient_loss_per_timestep)
 
 
-if __name__ == "__main__":
-    state1 = torch.Tensor(
-        [1.000090025996463, 1.115451599181422, 0.9956611980375802, 1.0000346655401584, 1.0000041727872926,
-         0.9999998758519482, -0.710891563807, -0.00743301723248, 0.0516815336039])
-    action1 = torch.Tensor([10])
-    reward1 = torch.Tensor([5])
-    state2 = torch.Tensor([1.000090025996463, 1.115451599181422, 0.9956611980375802, 1.0000346655401584, 1.0000041727872926,
-         1.9999998758519482, -0.710891563807, -0.00743301723248, 0.0516815336039])
-    action2 = torch.Tensor([5])
-    reward2 = torch.Tensor([20])
-    state3 = torch.Tensor([1.000090025996463, 2.115451599181422, 0.9956611980375802, 1.0000346655401584, 1.0000041727872926,
-         1.9999998758519482, 0.710891563807, 0.00743301723248, 0.0516815336039])
-    action3 = torch.Tensor([6])
-    reward3 = torch.Tensor([30])
-    state4 = torch.Tensor([2.000090025996463, 2.115451599181422, 0.9956611980375802, 1.0000346655401584, 1.0000041727872926,
-         1.9999998758519482, 0.710891563807, 0.00743301723248, 0.000])
-    action4 = torch.Tensor([7])
-    print(action4.shape)
-    reward4 = torch.Tensor([40])
-    state5 = torch.Tensor(
-        [1.000090025996463, 1.115451599181422, 0.9956611980375802, 1.0000346655401584, 1.0000041727872926,
-         0.9999998758519482, -0.710891563807, -0.00743301723248, 0.0516815336039])
-    action5 = torch.Tensor([9])
-    reward5 = torch.Tensor([50])
-    state6 = torch.Tensor(
-        [1.000090025996463, 1.115451599181422, 0.9956611980375802, 1.0000346655401584, 1.0000041727872926,
-         0.9999998758519482, -0.710891563807, -0.00743301723248, 0.0516815336039])
-    action6 = torch.Tensor([12])
-    reward6 = torch.Tensor([60])
-    x = torch.stack([state1, state2, state3, state4, state5, state6], 0)
-    # x = x.view(x.shape[0], 1, x.shape[1])
-    # print(x)
-    x = torch.stack([x, x], 0)
-    # x = x.permute(1, 0, 2)
-    a = [action1, action2, action3, action4, action5, action6]
-    action = torch.stack(a, 0)
-    action = torch.stack([action, action], 0)
-    reward = torch.stack([reward1, reward2, reward3, reward4, reward5, reward6], 0)
-    reward = torch.stack([reward, reward], 0)
-
-    # print('x.shape', x.shape)
-    # print('action.shape', action.shape)
-    # print('reward.shape', reward.shape)
-    x = x.permute(1, 0, 2)
-    action = torch.transpose(action, 0, 1)
-    reward = torch.transpose(reward, 0, 1)
-    # print('x.shape', x.shape)
-    # print('action.shape', action.shape)
-    # print('reward.shape', reward.shape)
-
-    test_agent = Agent()
-    result = test_agent(x, action, reward, isactor=False)
-    print(result)

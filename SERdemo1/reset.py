@@ -67,6 +67,9 @@ class Robot:
         reset_obj = self.__set_pose_srv(self.object_init_state)  # reset the 'BLUE_cylinder' & print status
         print(reset_obj)
 
+    def reset_object(self):
+        reset_obj = self.__set_pose_srv(self.object_init_state)
+        
     def get_current_state(self):
         """
         Returns the current state of the environment. The state is a tuple, where the first entry is

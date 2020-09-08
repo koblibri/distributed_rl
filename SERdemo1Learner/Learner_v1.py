@@ -54,10 +54,10 @@ class ReplayMemory(object):
             print('error: empty memory when sampling')
             return []
         # return random.sample(self.memory, this_batch_size)
-        trajectory = [self.memory[0]]
-        self.memory.pop(0)
-        self.position -= 1
-        return trajectory
+        # trajectory = [self.memory[0]]
+        # self.memory.pop(0)
+        # self.position -= 1
+        return self.memory
 
     def __len__(self):
         return len(self.memory)
@@ -65,7 +65,7 @@ class ReplayMemory(object):
 
 class Learner():
 
-    def __init__(self, lr=0.01, mem_capacity=10000, num_actions=12):
+    def __init__(self, lr=0.001, mem_capacity=10000, num_actions=12):
         self.lr = lr
         self.agent = Agent(num_actions=num_actions)
         self.replay_memory = ReplayMemory(mem_capacity)
@@ -151,7 +151,8 @@ class Learner():
         # # TODO: CORE memory, for games with large reward.
         # for i in range(3):
         #     self.training_process()
-        while self.replay_memory.position != 0:
+        # while self.replay_memory.position != 0:
+        for i in range(3):
             self.training_process()
         self.state_dict = self.agent.state_dict()
         torch.save(self.agent.state_dict(), 'params.pkl')
@@ -252,6 +253,7 @@ class Learner():
 
 
         loss.backward()
+
         self.optimizer.step()
 
         self.loss_dict.append(loss.item())

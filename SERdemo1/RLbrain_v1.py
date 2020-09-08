@@ -42,6 +42,8 @@ class Agent(nn.Module):
         x = x.view(seq_len, batch_size, -1)
         action = F.one_hot(action.long(), num_classes=self.num_actions)
         action = action.view(seq_len, batch_size, -1).to(torch.float32)
+        print("Action")
+        print(action)
         reward = reward.view(seq_len, batch_size, -1)
         # print('x.shape', x.shape)
         # print('action.shape', action.shape)
@@ -95,7 +97,8 @@ class Head(nn.Module):
         baseline = self.critic_linear(x)
         prob_weights = F.softmax(policy_logits, dim=1).clamp(1e-10, 1)
         
-        # print(prob_weights)
+        print("PROB WEIGHTS")
+        print(prob_weights)
 
         new_action = torch.multinomial(prob_weights, 1, replacement=True)
         # _, new_action = torch.max(policy_logits, dim=1)

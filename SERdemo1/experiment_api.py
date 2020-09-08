@@ -6,6 +6,7 @@ from sensor_msgs.msg import JointState
 from gazebo_msgs.srv import GetModelState
 from gazebo_msgs.srv import SetModelState
 from gazebo_msgs.msg import ModelState
+from gazebo_msgs.srv import GetLinkState
 
 class Robot:
 
@@ -26,12 +27,15 @@ class Robot:
         rospy.wait_for_service("gazebo/set_model_state", 10.0)
         self.__get_pose_srv = rospy.ServiceProxy("gazebo/get_model_state", GetModelState)
         self.__set_pose_srv = rospy.ServiceProxy("gazebo/set_model_state", SetModelState)
+        self.__get_link_srv = rospy.ServiceProxy("gazebo/get_link_state", GetLinkState)
+
 
         # get the initial state of the blue object
         self.object_init_state = ModelState()
         self.object_init_state.model_name = 'BLUE_cylinder'
         self.object_init_state.pose = self.__get_pose_srv('BLUE_cylinder', 'world').pose
         self.object_init_state.scale = self.__get_pose_srv('BLUE_cylinder', 'world').scale
+        
 
         # Variables that hold finger states
         self.__current_state = [None]
@@ -58,6 +62,10 @@ class Robot:
         reset_obj = self.__set_pose_srv(self.object_init_state)  # reset the 'BLUE_cylinder' & print status
         print(reset_obj)
 
+    def reset_object(self):
+        reset_obj = self.__set_pose_srv(self.object_init_state)
+        print(reset_obj)
+
     def get_current_state(self):
         """
         Returns the current state of the environment. The state is a tuple, where the first entry is
@@ -71,7 +79,7 @@ class Robot:
                                                                     self.__current_state[0][1][1]):
             rospy.sleep(0.1)
         return self.__current_state[0][:-1][0], self.__get_pose_srv('BLUE_cylinder', 'world').pose, \
-               self.__get_pose_srv('robot', 'COL_COL_COL_VIS_VIS_VIS_VIS_VIS_VIS_VIS_VIS_VIS_hollie_real.018').pose
+               self.__get_link_srv('robot::COL_COL_COL_VIS_VIS_VIS_VIS_VIS_VIS_VIS_VIS_VIS_hollie_real.018', 'world').link_state.pose
 
 
     def act(self, j1, j2, j3, j4, j5, j6):
