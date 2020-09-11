@@ -54,10 +54,10 @@ class ReplayMemory(object):
             print('error: empty memory when sampling')
             return []
         # return random.sample(self.memory, this_batch_size)
-        # trajectory = [self.memory[0]]
-        # self.memory.pop(0)
-        # self.position -= 1
-        return self.memory
+        trajectory = [self.memory[0]]
+        self.memory.pop(0)
+        self.position -= 1
+        return trajectory
 
     def __len__(self):
         return len(self.memory)
@@ -73,7 +73,7 @@ class Learner():
         self.loss_dict = []
         self.state_dict = self.agent.state_dict()
 
-        self.gamma = 0.99
+        self.gamma = 0.99 # 'Discounting factor.'
         self.baseline_cost = 0.5
         self.entropy_cost = 0.00025
 
@@ -151,8 +151,8 @@ class Learner():
         # # TODO: CORE memory, for games with large reward.
         # for i in range(3):
         #     self.training_process()
-        # while self.replay_memory.position != 0:
-        for i in range(3):
+        while self.replay_memory.position != 0:
+        # for i in range(5):
             self.training_process()
         self.state_dict = self.agent.state_dict()
         torch.save(self.agent.state_dict(), 'params.pkl')
@@ -180,6 +180,7 @@ class Learner():
         # print('done_batch.shape', done_batch.shape)
         # print('behavior_logits_batch.shape', behavior_logits_batch.shape)
 
+        # make time major
         state_batch = torch.transpose(state_batch, 0, 1)
         action_batch = torch.transpose(action_batch, 0, 1)
         reward_batch = torch.transpose(reward_batch, 0, 1)
@@ -194,12 +195,12 @@ class Learner():
         # print('done_batch.shape', done_batch.shape)
         # print('behavior_logits_batch.shape', behavior_logits_batch.shape)
 
-
-        target_logits, baseline = self.agent(state_batch, action_batch, reward_batch, done_batch, isactor=False)
+        target_logits, baseline = self.agent(x=state_batch, action=action_batch, reward=reward_batch, dones=done_batch, core_state=None, isactor=False)
         # print(target_logits)
         # print('------------------')
         # print(baseline)
-        # print(target_logits, baseline)
+        # print('target_logits', target_logits)
+        # print('behavior_logits_batch', behavior_logits_batch)
         # print(target_logits.shape)
         # print(baseline.shape)
 
@@ -208,7 +209,9 @@ class Learner():
 
         actions, behaviour_logits, rewards, dones = action_batch.view(action_batch.shape[0], -1).type(torch.long)[1:], behavior_logits_batch[1:], \
                                                     reward_batch.view(reward_batch.shape[0], -1)[1:], done_batch.view(done_batch.shape[0], -1)[1:]
+
         target_logits, baseline = target_logits[:-1], baseline[:-1]
+        # target_logits, baseline = target_logits[1:], baseline[1:]
         # print(actions.shape)
         # actions, behaviour_logits, rewards, dones = action_batch.view(action_batch.shape[0], -1).type(torch.long), behavior_logits_batch, \
         #                                             reward_batch.view(reward_batch.shape[0], -1), done_batch
@@ -227,47 +230,20 @@ class Learner():
         # print('vs', vs)
         # print('pg_advantages', pg_advantages)
         # print('baseline', baseline)
+        self.optimizer.zero_grad()
         criterion = RLbrain_v1.MyLoss()
-        # policy gradient loss
 
         loss = criterion.compute_policy_gradient_loss(target_logits, actions, pg_advantages)
-        # print('-----------')
-        # print(loss)
-        # baseline_loss
-        # criterion2 = MyLoss.compute_baseline_loss()
         loss += self.baseline_cost * criterion.compute_baseline_loss(vs - baseline)
-        # print(loss)
-        # entropy_loss
-        # criterion3 = MyLoss.compute_entropy_loss()
+
         loss += self.entropy_cost * criterion.compute_entropy_loss(target_logits)
         # print(loss)
-        self.optimizer.zero_grad()
-
-        # cross_entropy = F.cross_entropy(target_logits, actions, reduction='none')
-        # loss = (cross_entropy * pg_advantages.detach()).sum()
-        # # baseline_loss
-        # loss += self.baseline_cost * .5 * (vs - baseline).pow(2).sum()
-        # # entropy_loss
-        # loss += self.entropy_cost * -(-F.softmax(target_logits, 1) * F.log_softmax(target_logits, 1)).sum(-1).sum()
-        # loss.backward()
-
 
         loss.backward()
 
         self.optimizer.step()
 
         self.loss_dict.append(loss.item())
-
-        # q_pred = self.agent(state_batch)
-
-
-        # loss = criterion(q_pred,action_batch, RLbrain_v1.MyLoss.discount_and_norm_rewards(reward_batch))
-        # loss = criterion(q_pred, action_batch, reward_batch)
-        # self.optimizer.zero_grad()
-        # loss.backward()
-        # self.optimizer.step()
-
-        # self.loss_dict.append(loss.item())
         return
 
 
@@ -291,33 +267,33 @@ if __name__ == "__main__":
     # state1 = torch.Tensor(
     #     [1.000090025996463, 1.115451599181422, 0.9956611980375802, 1.0000346655401584, 1.0000041727872926,
     #      0.9999998758519482, -0.710891563807, -0.00743301723248, 0.0516815336039])
-    # action1 = torch.Tensor([10])
-    # reward1 = torch.Tensor([0.5])
+    # action1 = torch.Tensor([0])
+    # reward1 = torch.Tensor([0.1])
     # state2 = torch.Tensor(
     #     [1.000090025996463, 1.115451599181422, 0.9956611980375802, 1.0000346655401584, 1.0000041727872926,
     #      1.9999998758519482, -0.710891563807, -0.00743301723248, 0.0516815336039])
-    # action2 = torch.Tensor([5])
-    # reward2 = torch.Tensor([2])
+    # action2 = torch.Tensor([1])
+    # reward2 = torch.Tensor([0.2])
     # state3 = torch.Tensor(
     #     [1.000090025996463, 2.115451599181422, 0.9956611980375802, 1.0000346655401584, 1.0000041727872926,
     #      1.9999998758519482, 0.710891563807, 0.00743301723248, 0.0516815336039])
-    # action3 = torch.Tensor([6])
-    # reward3 = torch.Tensor([3])
+    # action3 = torch.Tensor([2])
+    # reward3 = torch.Tensor([0.3])
     # state4 = torch.Tensor(
     #     [2.000090025996463, 2.115451599181422, 0.9956611980375802, 1.0000346655401584, 1.0000041727872926,
     #      1.9999998758519482, 0.710891563807, 0.00743301723248, 0.000])
-    # action4 = torch.Tensor([7])
-    # reward4 = torch.Tensor([4])
+    # action4 = torch.Tensor([3])
+    # reward4 = torch.Tensor([0.4])
     # state5 = torch.Tensor(
     #     [1.000090025996463, 1.115451599181422, 0.9956611980375802, 1.0000346655401584, 1.0000041727872926,
     #      0.9999998758519482, -0.710891563807, -0.00743301723248, 0.0516815336039])
-    # action5 = torch.Tensor([9])
-    # reward5 = torch.Tensor([5])
+    # action5 = torch.Tensor([4])
+    # reward5 = torch.Tensor([0.5])
     # state6 = torch.Tensor(
     #     [1.000090025996463, 1.115451599181422, 0.9956611980375802, 1.0000346655401584, 1.0000041727872926,
     #      0.9999998758519482, -0.710891563807, -0.00743301723248, 0.0516815336039])
-    # action6 = torch.Tensor([11])
-    # reward6 = torch.Tensor([6])
+    # action6 = torch.Tensor([5])
+    # reward6 = torch.Tensor([0.6])
     # x = torch.stack([state1, state2, state3, state4, state5, state6], 0)
     # # x = x.view(x.shape[0], 1, x.shape[1])
     # # print(x)
@@ -347,24 +323,37 @@ if __name__ == "__main__":
     #      -0.2993, -0.2112, -0.0011, -0.1569])
     #
     # logits = torch.stack([logit1, logit2, logit3, logit4, logit5, logit6], 0)
-    # learner.replay_memory.push(x, action, reward, dones, logits)
-    # learner.replay_memory.push(x, action, reward, dones, logits)
-    # learner.replay_memory.push(x, action, reward, dones, logits)
-    # learner.replay_memory.push(x, action, reward, dones, logits)
-    # learner.replay_memory.push(x, action, reward, dones, logits)
+    # # print('logits.shape', logits.shape)
+    # x = torch.stack([state1, state2], 0)
+    # action = torch.stack([action1, action2], 0)
+    # reward = torch.stack([reward1, reward2], 0)
+    # dones = torch.stack([done0, done1], 0)
+    # logits = torch.stack([logit1, logit2], 0)
     #
-    # for i in range(3):
+    # learner.replay_memory.push(x, action, reward, dones, logits)
+    # learner.replay_memory.push(x, action, reward, dones, logits)
+    # learner.replay_memory.push(x, action, reward, dones, logits)
+    # learner.replay_memory.push(x, action, reward, dones, logits)
+    # learner.replay_memory.push(x, action, reward, dones, logits)
+    # #
+    # while learner.replay_memory.position != 0:
     #     learner.training_process()
     # print(learner.loss_dict)
-
-
-
-
+    #
+    #
+    #
+    #
     # # actor testing:
-    # state1 = state1.view(1, 1, 9)
-    # action1 = action1.view(1, 1, 1)
-    # reward1 = reward1.view(1, 1, 1)
-    # na, pl, _ = learner.agent(state1, action1, reward1, None, isactor=True)
+    # # state1 = state1.view(1, 1, 9)
+    # # action1 = action1.view(1, 1, 1)
+    # # reward1 = reward1.view(1, 1, 1)
+    # # na, pl, _ = learner.agent(state1, action1, reward1, None, isactor=True)
+    # state = torch.stack([state1, state2], 0)
+    # action = torch.stack([action1, action2], 0)
+    # reward = torch.stack([reward1, reward2], 0)
+    # dones = torch.stack([done0, done1], 0)
+
+    # na, pl, _ = learner.agent(state, action, reward, dones, isactor=False)
     # print(na)
     # print(pl)
 

@@ -21,6 +21,8 @@ def log_probs_from_logits_and_actions(policy_logits, actions):
     # one_hot = F.one_hot(actions, num_classes=num_actions)
     # neg_log_prob = torch.sum(-torch.log(F.softmax(policy_logits, dim=1)) * one_hot, dim=1)
     return -F.cross_entropy(policy_logits, actions, reduction='none')
+    # return -F.nll_loss(F.softmax(policy_logits), actions, reduction='none')
+    # return -torch.nn.NLLLoss(torch.nn.LogSoftmax(policy_logits, dim=-1), actions)
     # a = tf.nn.sparse_softmax_cross_entropy_with_logits( logits=policy_logits, labels=actions)
     # print(a)
     # return -neg_log_prob
@@ -84,31 +86,38 @@ def from_importance_weights(
         else:
             clipped_rhos = rhos
 
-        cs = torch.min(torch.ones_like(rhos), rhos)
+        cs = torch.min(torch.ones(rhos.shape), rhos)
         # Append bootstrapped value to get [v1, ..., v_t+1]
-        values_t_plus_1 = torch.cat((values, bootstrap_value.unsqueeze(0)), dim=0)
+        values_t_plus_1 = torch.cat((values[1:], bootstrap_value.unsqueeze(0)), dim=0)
+        # values_t_plus_1 = torch.cat((values, bootstrap_value), dim=0)
         #deltas = clipped_rhos * (rewards + discounts * values_t_plus_1 - values)
 
         # Note that all sequences are reversed, computation starts from the back.
         # V-trace vs are calculated through a scan from the back to the beginning
         # of the given trajectory.
-        seq_len = discounts.shape[0]
-        vs = []
+        seq_len = rewards.shape[0]
+        vs_minus_v_xs = []
         for i in range(seq_len):
-            v_s = values[i].clone()
+            # v_s = values[i].clone()  # Add V(x_s) to get v_s.
+            vs_t = 0
             for j in range(i, seq_len):
-                v_s += (torch.prod(discounts[i:j], dim=0) * torch.prod(cs[i:j], dim=0) * clipped_rhos[j] *
-                        (rewards[j] + discounts[j] * values_t_plus_1[j + 1] - values[j]))
-            vs.append(v_s)
-        vs = torch.stack(vs, dim=0)
+                basic_td = rewards[j] + discounts[j] * values_t_plus_1[j] - values[j]
+                vs_t += torch.prod(discounts[i:j], dim=0) * torch.prod(cs[i:j], dim=0) * clipped_rhos[j] * basic_td
+            vs_minus_v_xs.append(vs_t)
+
+        vs_minus_v_xs = torch.stack(vs_minus_v_xs, dim=0)
+        # print(vs_minus_v_xs)
+        # vs = vs_minus_v_xs
+        vs = torch.add(vs_minus_v_xs, values)
+        # print(vs)
         # Advantage for policy gradient.
+        vs_t_plus_1 = torch.cat((vs[1:], bootstrap_value.unsqueeze(0)), dim=0)
         if clip_pg_rho_threshold is not None:
             clipped_pg_rhos = torch.min(clip_pg_rho_threshold, rhos)
         else:
             clipped_pg_rhos = rhos
-        pg_advantages = (
-                clipped_pg_rhos * (rewards + discounts * torch.cat(
-            (vs[1:], bootstrap_value.unsqueeze(0)), dim=0) - values))
+        pg_advantages = clipped_pg_rhos * (rewards + discounts * vs_t_plus_1 - values)
 
         # Make sure no gradients backpropagated through the returned values.
+        # print(pg_advantages)
         return vs, pg_advantages

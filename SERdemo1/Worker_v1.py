@@ -120,6 +120,7 @@ class Worker():
         #     sel.close()
 
     def pull_parameters(self):
+        print('pull params request')
         request = self.create_request("pull", None)
         self.start_connection(host, port, request)
         # socket get learner side .state_dict()
@@ -212,15 +213,15 @@ class Worker():
         # check if blue object fell from the table
         eps = 0.01
         if z_new + eps < z_init:
-            return 100
+            return 1
 
         # check if blue object was moved
         if(distance_change_object > eps):
-            return 20
+            return 1
 
         print("Distance")
         print(distance_real)
-        return 2.0 /( 1 + distance_real)
+        return 0.4 /( 1 + distance_real)
 
     def select_strategy(self, strategy_threshold):
         """ select strategy (explore or exploit) for a given threshold
@@ -250,8 +251,8 @@ class Worker():
         # + 0.1 because there are some noises
         if((new_state[1].position.z + 0.1) < init_state[1].position.z):
             return True
-        elif (actions_counter is not None) and actions_counter >= 19:
-            print('20 steps done, game over')
+        elif (actions_counter is not None) and actions_counter >= 9:
+            print('10 steps done, game over')
             return True
         else:
             return False
@@ -307,7 +308,7 @@ class Worker():
 
     def run(self):
         # unable this, robot will perform act(0,-1,0,0,0,0) -> (0,-2,0,0,0,0) -> (-1,-2,0,0,0,0)
-        fast_test = False
+        fast_test = True
 
         # TODO: here we could randomize initial state (in episodes)
         bare_state = self.robot.get_current_state()
@@ -364,13 +365,13 @@ class Worker():
                 new_joint_state = []
 
                 strategy_threshold = 1 - (float(i) / num_episodes)
-                strategy_threshold = 0.2
+                strategy_threshold = 0.0
                 strategy = self.select_strategy(strategy_threshold)
 
                 if strategy == 'exploit':
                     # action = worker(state)
                     print('exploit')
-                    action, logits, core_state = self.agent(tensor_state, action, reward, core_state, isactor=True)
+                    action, logits, core_state = self.agent(x=tensor_state, action=action, reward=reward, dones=None, core_state=core_state, isactor=True)
 
                     current_joint_state = list(bare_state[0])
                     new_joint_state = self.transfer_action(current_joint_state, action.item())
@@ -378,7 +379,7 @@ class Worker():
                 elif strategy == 'explore':
                     print('explore')
                     random.seed(time.time())
-                    action, logits, core_state = self.agent(tensor_state, action, reward, core_state, isactor=True)
+                    action, logits, core_state = self.agent(x=tensor_state, action=action, reward=reward, dones=None, core_state=core_state, isactor=True)
                     action = random.randint(0, 11)
                     current_joint_state = list(bare_state[0])
                     new_joint_state = self.transfer_action(current_joint_state, action)
@@ -395,8 +396,8 @@ class Worker():
                     action = 4
                 elif(test == 3):
                     new_joint_state = [-1, -2, 0, 0, 0, 0]
-                    test = 1
-                    # fast_test = False
+                    test = 0
+                    fast_test = False
                     action = 5
 
                 j1, j2, j3, j4, j5, j6 = new_joint_state
@@ -421,11 +422,11 @@ class Worker():
                 tensor_state = torch.Tensor(list_state)
 
                 done = self.check_done(new_state, init_state, actions_counter)
-                done = torch.tensor(done, dtype=torch.bool).view(1, 1)
+                # done = torch.tensor(False, dtype=torch.bool).view(1, 1)
                 # print('log', logits.shape)
-                self.replay_memory.push(tensor_state, action, reward, done, logits.detach())
+                self.replay_memory.push(tensor_state, action, reward, torch.tensor(False, dtype=torch.bool).view(1, 1), logits.detach())
 
-                if self.replay_memory.position == 20:
+                if self.replay_memory.position == 10:
                     self.send_exp()  # after 20 steps, send the trajectory
 
                 if done:

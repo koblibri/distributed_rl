@@ -56,8 +56,8 @@ class Agent(nn.Module):
         cx = None
 
         if core_state is None:
-            hx = torch.randn((batch_size, self.lstm_hidden))
-            cx = torch.randn((batch_size, self.lstm_hidden))
+            hx = torch.zeros((batch_size, self.lstm_hidden))
+            cx = torch.zeros((batch_size, self.lstm_hidden))
         else:
             hx = core_state[0]
             cx = core_state[1]
@@ -66,21 +66,29 @@ class Agent(nn.Module):
         lstm_out = []
         # print(seq_len)
         for i in range(seq_len):
+            if dones is not None:
+                hx = torch.where(dones[i].view(-1, 1), torch.zeros((batch_size, self.lstm_hidden)), hx)
+                cx = torch.where(dones[i].view(-1, 1), torch.zeros((batch_size, self.lstm_hidden)), cx)
             hx, cx = self.lstm(x[i], (hx, cx))
             # lstm_out = torch.cat((lstm_out, hx), dim=0)
+            # print('hx.shape', hx.shape)
             lstm_out.append(hx)
             core_state = torch.stack([hx, cx], 0)
 
         # for state, done in zip(torch.unbind(x, 0), torch)
-        # print('lstm_out.len', lstm_out.shape)
+        # print('lstm_out.len', len(lstm_out[0].shape))
         x = torch.cat(lstm_out, 0)
-        # print(x.shape)
+        # print('x.shape', x.shape)
+        # x = x.flatten(end_dim=1)
         new_action, policy_logits, baseline = self.head(x)
 
         if isactor:
             return new_action, policy_logits.view(1, -1), core_state
         else:
-            # print(policy_logits.view(seq_len, -1, batch_size).shape)
+            # print('naive policy_logits.shape', policy_logits.shape)
+            # print('naive policy_logits.shape', policy_logits)
+            # print('transferred policy_logits.shape', policy_logits.view(seq_len, -1, batch_size).shape)
+            # print('transferred policy_logits.shape', policy_logits.view(seq_len, -1, batch_size))
             return policy_logits.view(seq_len, -1, batch_size), baseline.view(seq_len, batch_size)
 
 
@@ -91,6 +99,7 @@ class Head(nn.Module):
         self.critic_linear = nn.Linear(256, 1)
 
     def forward(self, x):
+        # print(x.shape)
         policy_logits = self.actor_linear(x)
         baseline = self.critic_linear(x)
         prob_weights = F.softmax(policy_logits, dim=1).clamp(1e-10, 1)
