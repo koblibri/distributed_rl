@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: rl-learner
+  labels:
+    app: rl-learner
+spec:
+  type: NodePort
+  ports:
+  - port: 30007
+    targetPort: 30007
+    nodePort: 30007
+  selector:
+    app: rl-learner
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rl-learner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rl-learner
+  template:
+    metadata:
+      labels:
+        app: rl-learner
+    spec:
+      containers:
+        - name: rl-learner
+          image: rifqifatih/rl_learner
+          command: ["bash"]
+          args: ["-c", "python3 -u Learner_v1.py --host 0.0.0.0 --port $RL_LEARNER_SERVICE_PORT"]
+          imagePullPolicy: Always
+          ports:
+    - containerPort: 30007
