@@ -79,45 +79,60 @@ def from_importance_weights(
     if clip_pg_rho_threshold is not None:
         assert len(clip_pg_rho_threshold.shape) == 0
 
-    with torch.no_grad():
-        rhos = torch.exp(log_rhos)
-        if clip_rho_threshold is not None:
-            clipped_rhos = torch.min(clip_rho_threshold, rhos)
-        else:
-            clipped_rhos = rhos
+    # with torch.no_grad():
+    rhos = torch.exp(log_rhos)
+    if clip_rho_threshold is not None:
+        clipped_rhos = torch.min(clip_rho_threshold, rhos)
+    else:
+        clipped_rhos = rhos
 
-        cs = torch.min(torch.ones(rhos.shape), rhos)
-        # Append bootstrapped value to get [v1, ..., v_t+1]
-        values_t_plus_1 = torch.cat((values[1:], bootstrap_value.unsqueeze(0)), dim=0)
-        # values_t_plus_1 = torch.cat((values, bootstrap_value), dim=0)
-        #deltas = clipped_rhos * (rewards + discounts * values_t_plus_1 - values)
+    cs = torch.min(torch.ones(rhos.shape), rhos)
+    # Append bootstrapped value to get [v1, ..., v_t+1]
+    values_t_plus_1 = torch.cat((values[1:], bootstrap_value.unsqueeze(0)), dim=0)
+    # values_t_plus_1 = torch.cat((values, bootstrap_value), dim=0)
+    #deltas = clipped_rhos * (rewards + discounts * values_t_plus_1 - values)
 
-        # Note that all sequences are reversed, computation starts from the back.
-        # V-trace vs are calculated through a scan from the back to the beginning
-        # of the given trajectory.
-        seq_len = rewards.shape[0]
-        vs_minus_v_xs = []
-        for i in range(seq_len):
-            # v_s = values[i].clone()  # Add V(x_s) to get v_s.
-            vs_t = 0
-            for j in range(i, seq_len):
-                basic_td = rewards[j] + discounts[j] * values_t_plus_1[j] - values[j]
-                vs_t += torch.prod(discounts[i:j], dim=0) * torch.prod(cs[i:j], dim=0) * clipped_rhos[j] * basic_td
-            vs_minus_v_xs.append(vs_t)
+    # Note that all sequences are reversed, computation starts from the back.
+    # V-trace vs are calculated through a scan from the back to the beginning
+    # of the given trajectory.
+    deltas = clipped_rhos * (rewards + discounts * values_t_plus_1 - values)
 
-        vs_minus_v_xs = torch.stack(vs_minus_v_xs, dim=0)
-        # print(vs_minus_v_xs)
-        # vs = vs_minus_v_xs
-        vs = torch.add(vs_minus_v_xs, values)
-        # print(vs)
-        # Advantage for policy gradient.
-        vs_t_plus_1 = torch.cat((vs[1:], bootstrap_value.unsqueeze(0)), dim=0)
-        if clip_pg_rho_threshold is not None:
-            clipped_pg_rhos = torch.min(clip_pg_rho_threshold, rhos)
-        else:
-            clipped_pg_rhos = rhos
-        pg_advantages = clipped_pg_rhos * (rewards + discounts * vs_t_plus_1 - values)
+    # sequences = (discounts, cs, deltas)
 
-        # Make sure no gradients backpropagated through the returned values.
-        # print(pg_advantages)
-        return vs, pg_advantages
+    initial_values = torch.zeros_like(bootstrap_value)
+    acc = initial_values
+    acc.requires_grad_(False)
+    seq_len = discounts.shape[0]
+    for i in range(seq_len - 1, -1, -1):
+        print(i)
+        discount_t, c_t, delta_t = discounts[i], cs[i], deltas[i]
+        acc = delta_t + discount_t * c_t * acc
+
+    vs_minus_v_xs = acc
+    # vs_minus_v_xs = []
+    # for i in range(seq_len):
+    #     # v_s = values[i].clone()  # Add V(x_s) to get v_s.
+    #     vs_t = 0
+    #     for j in range(i, seq_len):
+    #         basic_td = rewards[j] + discounts[j] * values_t_plus_1[j] - values[j]
+    #         vs_t += torch.prod(discounts[i:j], dim=0) * torch.prod(cs[i:j], dim=0) * clipped_rhos[j] * basic_td
+    #     vs_minus_v_xs.append(vs_t)
+    #
+    #
+    # vs_minus_v_xs = torch.stack(vs_minus_v_xs, dim=0)
+    # print(vs_minus_v_xs)
+    # vs = vs_minus_v_xs
+    vs = torch.add(vs_minus_v_xs, values)
+    # print(vs)
+    # Advantage for policy gradient.
+    vs_t_plus_1 = torch.cat((vs[1:], bootstrap_value.unsqueeze(0)), dim=0)
+    if clip_pg_rho_threshold is not None:
+        clipped_pg_rhos = torch.min(clip_pg_rho_threshold, rhos)
+    else:
+        clipped_pg_rhos = rhos
+
+    pg_advantages = clipped_pg_rhos * (rewards + discounts * vs_t_plus_1 - values)
+    # print('pg_advantages', pg_advantages)
+    # Make sure no gradients backpropagated through the returned values.
+    # print(pg_advantages)
+    return vs.detach(), pg_advantages.detach()

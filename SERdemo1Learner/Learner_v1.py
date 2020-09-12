@@ -65,7 +65,7 @@ class ReplayMemory(object):
 
 class Learner():
 
-    def __init__(self, lr=0.001, mem_capacity=10000, num_actions=12):
+    def __init__(self, lr=0.0001, mem_capacity=10000, num_actions=12):
         self.lr = lr
         self.agent = Agent(num_actions=num_actions)
         self.replay_memory = ReplayMemory(mem_capacity)
@@ -203,15 +203,15 @@ class Learner():
         # print('behavior_logits_batch', behavior_logits_batch)
         # print(target_logits.shape)
         # print(baseline.shape)
-
+        # print(' baseline after out',  baseline)
         # Use last baseline value (from the value function) to bootstrap.
         bootstrap_value = baseline[-1]
 
         actions, behaviour_logits, rewards, dones = action_batch.view(action_batch.shape[0], -1).type(torch.long)[1:], behavior_logits_batch[1:], \
                                                     reward_batch.view(reward_batch.shape[0], -1)[1:], done_batch.view(done_batch.shape[0], -1)[1:]
 
-        target_logits, baseline = target_logits[:-1], baseline[:-1]
-        # target_logits, baseline = target_logits[1:], baseline[1:]
+        # target_logits, baseline = target_logits[:-1], baseline[:-1]
+        target_logits, baseline = target_logits[1:], baseline[1:]
         # print(actions.shape)
         # actions, behaviour_logits, rewards, dones = action_batch.view(action_batch.shape[0], -1).type(torch.long), behavior_logits_batch, \
         #                                             reward_batch.view(reward_batch.shape[0], -1), done_batch
@@ -232,11 +232,15 @@ class Learner():
         # print('baseline', baseline)
         self.optimizer.zero_grad()
         criterion = RLbrain_v1.MyLoss()
+        # print('actions', actions)
 
         loss = criterion.compute_policy_gradient_loss(target_logits, actions, pg_advantages)
-        loss += self.baseline_cost * criterion.compute_baseline_loss(vs - baseline)
+        # print('vs:', vs)
+        # print('  baseline bf loss:', baseline)
+        # loss += self.baseline_cost * criterion.compute_baseline_loss(vs=vs, baseline=baseline)
+        loss += 1.0 * criterion.compute_baseline_loss(vs=vs, baseline=baseline)
 
-        loss += self.entropy_cost * criterion.compute_entropy_loss(target_logits)
+        # loss += self.entropy_cost * criterion.compute_entropy_loss(target_logits)
         # print(loss)
 
         loss.backward()
@@ -257,8 +261,8 @@ x = threading.Thread(target=learner_func, args=())
 # x.start()
 
 learner = Learner()
-if os.path.exists('params.pkl'):
-    learner.agent.load_state_dict(torch.load('params.pkl'))
+# if os.path.exists('params.pkl'):
+#     learner.agent.load_state_dict(torch.load('params.pkl'))
 
 if __name__ == "__main__":
     # x.join()
@@ -266,34 +270,34 @@ if __name__ == "__main__":
 
     # state1 = torch.Tensor(
     #     [1.000090025996463, 1.115451599181422, 0.9956611980375802, 1.0000346655401584, 1.0000041727872926,
-    #      0.9999998758519482, -0.710891563807, -0.00743301723248, 0.0516815336039])
+    #      0.9999998758519482, -0.710891563807, -0.00743301723248, 0.0516815336039, -0.710891563807, -0.00743301723248, 0.0516815336039])
     # action1 = torch.Tensor([0])
     # reward1 = torch.Tensor([0.1])
     # state2 = torch.Tensor(
     #     [1.000090025996463, 1.115451599181422, 0.9956611980375802, 1.0000346655401584, 1.0000041727872926,
-    #      1.9999998758519482, -0.710891563807, -0.00743301723248, 0.0516815336039])
+    #      1.9999998758519482, -0.710891563807, -0.00743301723248, 0.0516815336039, -0.710891563807, -0.00743301723248, 0.0516815336039])
     # action2 = torch.Tensor([1])
     # reward2 = torch.Tensor([0.2])
     # state3 = torch.Tensor(
     #     [1.000090025996463, 2.115451599181422, 0.9956611980375802, 1.0000346655401584, 1.0000041727872926,
-    #      1.9999998758519482, 0.710891563807, 0.00743301723248, 0.0516815336039])
+    #      1.9999998758519482, 0.710891563807, 0.00743301723248, 0.0516815336039, -0.710891563807, -0.00743301723248, 0.0516815336039])
     # action3 = torch.Tensor([2])
     # reward3 = torch.Tensor([0.3])
     # state4 = torch.Tensor(
     #     [2.000090025996463, 2.115451599181422, 0.9956611980375802, 1.0000346655401584, 1.0000041727872926,
-    #      1.9999998758519482, 0.710891563807, 0.00743301723248, 0.000])
+    #      1.9999998758519482, 0.710891563807, 0.00743301723248, 0.000, -0.710891563807, -0.00743301723248, 0.0516815336039])
     # action4 = torch.Tensor([3])
     # reward4 = torch.Tensor([0.4])
     # state5 = torch.Tensor(
     #     [1.000090025996463, 1.115451599181422, 0.9956611980375802, 1.0000346655401584, 1.0000041727872926,
-    #      0.9999998758519482, -0.710891563807, -0.00743301723248, 0.0516815336039])
+    #      0.9999998758519482, -0.710891563807, -0.00743301723248, 0.0516815336039, -0.710891563807, -0.00743301723248, 0.0516815336039])
     # action5 = torch.Tensor([4])
-    # reward5 = torch.Tensor([0.5])
+    # reward5 = torch.Tensor([1])
     # state6 = torch.Tensor(
     #     [1.000090025996463, 1.115451599181422, 0.9956611980375802, 1.0000346655401584, 1.0000041727872926,
-    #      0.9999998758519482, -0.710891563807, -0.00743301723248, 0.0516815336039])
+    #      0.9999998758519482, -0.710891563807, -0.00743301723248, 0.0516815336039, -0.710891563807, -0.00743301723248, 0.0516815336039])
     # action6 = torch.Tensor([5])
-    # reward6 = torch.Tensor([0.6])
+    # reward6 = torch.Tensor([0.5])
     # x = torch.stack([state1, state2, state3, state4, state5, state6], 0)
     # # x = x.view(x.shape[0], 1, x.shape[1])
     # # print(x)
@@ -307,7 +311,7 @@ if __name__ == "__main__":
     # # reward = torch.stack([reward], 0)
     # done1 = torch.tensor(True, dtype=torch.bool)
     # done0 = torch.tensor(False, dtype=torch.bool)
-    # dones = torch.stack([done0, done0, done0, done0, done0, done1], 0)
+    # dones = torch.stack([done1, done0, done0, done0, done0, done0], 0)
     #
     # logit1 = torch.Tensor([-0.3957,  0.2553,  0.1731,  0.1928, -0.1930,  0.2238, -0.1347, -0.0121,
     #       0.3904, -0.0646,  0.0054, -0.0808])
@@ -324,12 +328,29 @@ if __name__ == "__main__":
     #
     # logits = torch.stack([logit1, logit2, logit3, logit4, logit5, logit6], 0)
     # # print('logits.shape', logits.shape)
-    # x = torch.stack([state1, state2], 0)
-    # action = torch.stack([action1, action2], 0)
-    # reward = torch.stack([reward1, reward2], 0)
-    # dones = torch.stack([done0, done1], 0)
-    # logits = torch.stack([logit1, logit2], 0)
+    # # x = torch.stack([state1, state2], 0)
+    # # action = torch.stack([action1, action2], 0)
+    # # reward = torch.stack([reward1, reward2], 0)
+    # # dones = torch.stack([done0, done1], 0)
+    # # logits = torch.stack([logit1, logit2], 0)
     #
+    # learner.replay_memory.push(x, action, reward, dones, logits)
+    # learner.replay_memory.push(x, action, reward, dones, logits)
+    # learner.replay_memory.push(x, action, reward, dones, logits)
+    # learner.replay_memory.push(x, action, reward, dones, logits)
+    # learner.replay_memory.push(x, action, reward, dones, logits)
+    # learner.replay_memory.push(x, action, reward, dones, logits)
+    # learner.replay_memory.push(x, action, reward, dones, logits)
+    # learner.replay_memory.push(x, action, reward, dones, logits)
+    # learner.replay_memory.push(x, action, reward, dones, logits)
+    # learner.replay_memory.push(x, action, reward, dones, logits)
+    # learner.replay_memory.push(x, action, reward, dones, logits)
+    # learner.replay_memory.push(x, action, reward, dones, logits)
+    # learner.replay_memory.push(x, action, reward, dones, logits)
+    # learner.replay_memory.push(x, action, reward, dones, logits)
+    # learner.replay_memory.push(x, action, reward, dones, logits)
+    # learner.replay_memory.push(x, action, reward, dones, logits)
+    # learner.replay_memory.push(x, action, reward, dones, logits)
     # learner.replay_memory.push(x, action, reward, dones, logits)
     # learner.replay_memory.push(x, action, reward, dones, logits)
     # learner.replay_memory.push(x, action, reward, dones, logits)
@@ -352,9 +373,9 @@ if __name__ == "__main__":
     # action = torch.stack([action1, action2], 0)
     # reward = torch.stack([reward1, reward2], 0)
     # dones = torch.stack([done0, done1], 0)
-
-    # na, pl, _ = learner.agent(state, action, reward, dones, isactor=False)
-    # print(na)
-    # print(pl)
+    #
+    # # na, pl, _ = learner.agent(state, action, reward, dones, isactor=False)
+    # # print(na)
+    # # print(pl)
 
 

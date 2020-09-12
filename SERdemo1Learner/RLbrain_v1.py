@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 class Agent(nn.Module):
 
-    def __init__(self, num_actions=12, input_size=9, fc_size=512, lstm_hidden=256, isactor=False):
+    def __init__(self, num_actions=12, input_size=12, fc_size=512, lstm_hidden=256, isactor=False):
         super(Agent, self).__init__()
         self.num_actions = num_actions
         self.input_size = input_size
@@ -26,9 +26,9 @@ class Agent(nn.Module):
         # x = torch.flatten(x)
         # print(x.shape)
 
-        x = F.relu(self.l1(x))
-        x = F.relu(self.l2(x))
-        x = F.relu(self.l3(x))
+        x = F.leaky_relu(self.l1(x))
+        x = F.leaky_relu(self.l2(x))
+        x = F.leaky_relu(self.l3(x))
 
         # isactor = self.isactor
 
@@ -89,6 +89,7 @@ class Agent(nn.Module):
             # print('naive policy_logits.shape', policy_logits)
             # print('transferred policy_logits.shape', policy_logits.view(seq_len, -1, batch_size).shape)
             # print('transferred policy_logits.shape', policy_logits.view(seq_len, -1, batch_size))
+            # print('baseline', baseline)
             return policy_logits.view(seq_len, -1, batch_size), baseline.view(seq_len, batch_size)
 
 
@@ -102,8 +103,9 @@ class Head(nn.Module):
         # print(x.shape)
         policy_logits = self.actor_linear(x)
         baseline = self.critic_linear(x)
+        # print(baseline)
         prob_weights = F.softmax(policy_logits, dim=1).clamp(1e-10, 1)
-        # print(prob_weights)
+        # print('prob_weights', prob_weights)
 
         new_action = torch.multinomial(prob_weights, 1, replacement=True)
         return new_action, policy_logits, baseline
@@ -126,23 +128,26 @@ class MyLoss(nn.Module):
     #     # to be done
     #     return true_reward
 
-    def compute_baseline_loss(self, advantages):
+    def compute_baseline_loss(self, vs, baseline):
         # Loss for the baseline, summed over the time dimension.
         # Multiply by 0.5 to match the standard update rule:
         # d(loss) / d(baseline) = advantage
-        return 0.5 * torch.mean(advantages**2)
+        advaranges = vs - baseline
+        # print(advaranges.type())
+        return 0.5 * torch.sum(advaranges**2)
 
     def compute_entropy_loss(self, logits):
         policy = F.softmax(logits, dim=1)
         log_policy = F.log_softmax(logits, dim=1)
         entropy_per_timestep = torch.sum(-policy * log_policy, dim=-1)
-        return -torch.mean(entropy_per_timestep)
+        return -torch.sum(entropy_per_timestep)
 
     def compute_policy_gradient_loss(self, logits, actions, advantages):
-        cross_entropy = F.cross_entropy(logits, actions)
+        cross_entropy = F.cross_entropy(logits, actions, reduction='none')
         # print(advantages.requires_grad)
-        # advantages = advantages.no_grad()
+        advantages = advantages.requires_grad_(False)
+        # print(advantages)
         policy_gradient_loss_per_timestep = cross_entropy * advantages
-        return torch.mean(policy_gradient_loss_per_timestep)
+        return torch.sum(policy_gradient_loss_per_timestep)
 
 

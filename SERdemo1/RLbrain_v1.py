@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 class Agent(nn.Module):
 
-    def __init__(self, num_actions=12, input_size=9, fc_size=512, lstm_hidden=256, isactor=False):
+    def __init__(self, num_actions=12, input_size=12, fc_size=512, lstm_hidden=256, isactor=False):
         super(Agent, self).__init__()
         self.num_actions = num_actions
         self.input_size = input_size
@@ -26,9 +26,9 @@ class Agent(nn.Module):
         # x = torch.flatten(x)
         # print(x.shape)
 
-        x = F.relu(self.l1(x))
-        x = F.relu(self.l2(x))
-        x = F.relu(self.l3(x))
+        x = F.leaky_relu(self.l1(x))
+        x = F.leaky_relu(self.l2(x))
+        x = F.leaky_relu(self.l3(x))
 
         # isactor = self.isactor
 
@@ -103,7 +103,8 @@ class Head(nn.Module):
         policy_logits = self.actor_linear(x)
         baseline = self.critic_linear(x)
         prob_weights = F.softmax(policy_logits, dim=1).clamp(1e-10, 1)
-        # print(prob_weights)
+        print('prob_weights:')
+        print(prob_weights)
 
         new_action = torch.multinomial(prob_weights, 1, replacement=True)
         return new_action, policy_logits, baseline
