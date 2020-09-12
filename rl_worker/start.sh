@@ -6,4 +6,13 @@ export PYTHONPATH
 . $HBP/user-scripts/nrp_aliases
 cle-virtual-coach start_experiment.py
 sleep 5
-python Worker_v1.py
+key="$1"
+case $key in
+    --fast_test)
+        echo "Executing Fast Test!"
+        python Worker_v1.py --fast_test=True
+    ;;
+    *)
+        python Worker_v1.py --fast_test=False
+    ;;
+esac

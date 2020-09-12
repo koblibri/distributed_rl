@@ -82,7 +82,7 @@ start(){
 }
 
 pull_images(){
-  echo "Start IP: "$nrp_ip$nrp_base_ip
+  echo "Start IP: "$nrp_ip
   echo -e "${BLUE}Pulling frontend image, this may take a while..${NC}"
   $DOCKER_CMD pull hbpneurorobotics/nrp_frontend:dev
   echo -e "${GREEN}Successfully downloaded frontend image.${NC}"
@@ -328,6 +328,8 @@ version_check() {
 }
 
 start_experiments() {
+  fast_test=$1
+  
   echo -e "${BLUE}Starting Local Learner${NC}"
   if [ ! -e "./rl_learner/Learner_v1.py" ] 
   then
@@ -348,7 +350,13 @@ start_experiments() {
   do
 	curr_backend=${nrp_backends[$i]}
 	echo $curr_backend
-	thecmd="bash -c \"echo -e \\\"${BLUE}You are now in a new terminal responsible for the worker $curr_backend\n${NC}\\\"; docker exec -it $curr_backend bash /home/bbpnrsoa/nrp/src/rl_worker/start.sh; read line;\""
+  if [ $fast_test = true ]
+  then
+    thecmd="bash -c \"echo -e \\\"${BLUE}You are now in a new terminal responsible for the worker $curr_backend\n${NC}\\\"; docker exec -it $curr_backend bash /home/bbpnrsoa/nrp/src/rl_worker/start.sh --fast_test; read line;\""
+  else
+    thecmd="bash -c \"echo -e \\\"${BLUE}You are now in a new terminal responsible for the worker $curr_backend\n${NC}\\\"; docker exec -it $curr_backend bash /home/bbpnrsoa/nrp/src/rl_worker/start.sh; read line;\""
+	
+  fi
 	if [ -z ""`which gnome-terminal` ]
   	then
 	    echo -e "${GREEN}No gnome-terminal installed. Defaulting to bash.${NC}"
@@ -359,6 +367,7 @@ start_experiments() {
 	sleep 4
   done
 }
+
 
 setup_experiments() {
   
@@ -373,9 +382,15 @@ setup_experiments() {
   do
 	curr_backend=${nrp_backends[$i]}
 	echo $curr_backend
-	$DOCKER_CMD cp ./rl_worker $curr_backend:/home/bbpnrsoa/nrp/src
-	$DOCKER_CMD exec $curr_backend bash -c 'pip install -r /home/bbpnrsoa/nrp/src/rl_worker/requirements.txt --no-cache-dir'
-	echo -e "${BLUE}DRL files installed on container $curr_backend ${NC}"
+	$DOCKER_CMD cp ./rl_worker $curr_backend:/home/bbpnrsoa/nrp/src 
+  #Assuming if pytorch is installed in the container, then all the other packages are also there. (Reinstallation)
+  $DOCKER_CMD exec $curr_backend bash -c 'python -c "import torch"' || $DOCKER_CMD exec $curr_backend bash -c 'pip install -r /home/bbpnrsoa/nrp/src/rl_worker/requirements.txt --no-cache-dir'
+  #if [[ "$?" -eq 1 ]]
+  #then
+  #  echo "Installing python packages"
+	#  $DOCKER_CMD exec $curr_backend bash -c 'pip install -r /home/bbpnrsoa/nrp/src/rl_worker/requirements.txt --no-cache-dir'
+	#fi
+  echo -e "${BLUE}DRL files installed on container $curr_backend ${NC}"
   done
   
   echo -e "${BLUE}Installing local python requirements${NC}"
@@ -414,7 +429,7 @@ nrp_base_ip=3
 declare -A nrp_backends nrp_ips
 
 ##EDIT this line to set the number of parallel nrp-backends/robots
-num_backends=8;
+num_backends=2;
 
 if [ $num_backends -lt 1 ]
 then
@@ -469,15 +484,16 @@ Commands:
     update            Update the NRP
     install           Install the NRP
     uninstall         Uninstall the NRP
-    stop              Stops the nrp2 containers
-    start             Starts nrp2 containers which have previously been stopped
+    stop              Stops the nrp containers
+    start             Starts nrp containers which have previously been stopped
     reset_backend     Restores the backend container
     reset_frontend    Restores the frontend container
     reset             Restores the backend and frontend containers
     connect_frontend  Connect to the frontend container (Opens in a new terminal)
     connect_backend   Connect to the backend container (Opens in a new terminal)
-    install_drl       Installs all the necessary files for the Distributed Reinforcement Learning Experiment
+    install_drl       Installs all the necessary files for the Distributed Reinforcement Learning Experiment. Can also be used to copy files inside the rl_worker folder to all containers.
     start_experiment  Starts all experiments
+    start_fast_test   Starts all experiments in the fast test variant
     
 
 ${BLUE}Please note:${NC}
@@ -558,7 +574,6 @@ case $key in
        	CMD+="stop $curr_backend &&" 
        done
        CMD+="stop frontend"
-       shift
       shift
     ;;
     reset_backend)
@@ -596,7 +611,12 @@ case $key in
       shift
     ;;
     start_experiment)
-      CMD="start_experiments"
+      CMD="start_experiments false"
+      shift
+    ;;
+    start_fast_test)
+      echo -e "${BLUE}Fast test is enabled!${NC}"
+      CMD="start_experiments true"
       shift
     ;;  	
     *)

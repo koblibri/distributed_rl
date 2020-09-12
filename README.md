@@ -1,4 +1,10 @@
 # How To: Run multiple Workers
+### Requirements:
+ - Docker
+ - Python2
+ - pip
+ - ~15GB of available disk space for initial NRP installation
+ - ~10GB of available disk space per additional worker
 
 ## Step 1: Set the number of NRP Backends
 Go into the *custom_nrp_installer.sh* script and edit **line 416** to a number greater than zero.
@@ -76,6 +82,14 @@ Start all robots with
 > ./custom_nrp_installer.sh start_experiment
 
 This will open an individual terminal for the central learner and for each nrp-backend.
+
+The other option is to use
+
+> ./custom_nrp_installer.sh start_fast_test
+
+for a quick test without the self learning of robots.
+
+
 You can then monitor the experiment in the terminals or viewing the simulation in the standard NRP-website on [172.19.0.2:9000/#/esv-private](172.19.0.2:9000/#/esv-private).
 
 Close any experiment/window with CTRL-C. Restart / stop everything with 
