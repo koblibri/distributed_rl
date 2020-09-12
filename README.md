@@ -7,7 +7,7 @@
  - ~10GB of available disk space per additional worker
 
 ## Step 1: Set the number of NRP Backends
-Go into the *custom_nrp_installer.sh* script and edit **line 416** to a number greater than zero.
+Go into the *custom_nrp_installer.sh* script and edit **line 435** to a number greater than zero.
 This will set-up as many NRP-Backends as specified.
 ## Step 2: Install NRP with the custom installer script
 > ./custom_nrp_installer.sh install

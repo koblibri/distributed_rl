@@ -428,8 +428,11 @@ nrp_base_ip=3
 
 declare -A nrp_backends nrp_ips
 
+
+
+
 ##EDIT this line to set the number of parallel nrp-backends/robots
-num_backends=2;
+num_backends=0;
 
 if [ $num_backends -lt 1 ]
 then
