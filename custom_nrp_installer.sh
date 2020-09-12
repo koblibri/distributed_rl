@@ -436,7 +436,7 @@ num_backends=0;
 
 if [ $num_backends -lt 1 ]
 then
-	echo -e "${RED}[ERROR] At least one container has to be installed. Please edit the num_backends to a number greater than zero!${NC}"
+	echo -e "${RED}[ERROR] At least one container has to be installed. Please edit the num_backends in line 435 of this script to a number greater than zero!${NC}"
 	exit
 fi
 nrp_backends[0]="nrp0"
