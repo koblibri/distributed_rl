@@ -13,6 +13,6 @@ case $key in
         python worker.py --fast_test=True
     ;;
     *)
-        python worker.py --fast_test=False
+        python worker.py
     ;;
 esac
