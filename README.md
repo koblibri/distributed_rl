@@ -70,7 +70,7 @@ The environment consists of one Hollie Robot arm with six Degrees of Freedom, si
 Schunk hand is mounted on the arm, but it is of little relevance to the task to be solved. There is
 also one blue cylinder on the table.
 
-<img src="SERdemo1/experiment/ser_rl_ss20/ExDDemoManipulation.png" width="400" />
+<img src="Worker/experiment/ser_rl_ss20/ExDDemoManipulation.png" width="400" />
 
 The task is for the arm to move towards the cylinder and knock it off the table. The observations at
 each time step are: 
