@@ -338,7 +338,7 @@ start_experiments() {
   fi
   learn_dir=$(readlink -f Learner/learner.py)
   thecmd="bash -c \"echo -e \\\"${BLUE}You are now in a new terminal responsible for the central learner\n${NC}\\\"; python2 $learn_dir\""
-  echo $thecmd
+  #echo $thecmd
   if [ -z ""`which gnome-terminal` ]
   then
     echo -e "${GREEN}No gnome-terminal installed. Defaulting to bash.${NC}"
