@@ -331,12 +331,12 @@ start_experiments() {
   fast_test=$1
   
   echo -e "${BLUE}Starting Local Learner${NC}"
-  if [ ! -e "./rl_learner/Learner_v1.py" ] 
+  if [ ! -e "./Learner/learner.py" ] 
   then
- 	echo -e "${RED}[ERROR]Learner.py does not exist!${NC}"
+ 	echo -e "${RED}[ERROR]learner.py does not exist!${NC}"
  	exit
   fi
-  learn_dir=$(readlink -f rl_learner/Learner_v1.py)
+  learn_dir=$(readlink -f Learner/learner.py)
   thecmd="bash -c \"echo -e \\\"${BLUE}You are now in a new terminal responsible for the central learner\n${NC}\\\"; python2 $learn_dir\""
   echo $thecmd
   if [ -z ""`which gnome-terminal` ]
@@ -352,9 +352,9 @@ start_experiments() {
 	echo $curr_backend
   if [ $fast_test = true ]
   then
-    thecmd="bash -c \"echo -e \\\"${BLUE}You are now in a new terminal responsible for the worker $curr_backend\n${NC}\\\"; docker exec -it $curr_backend bash /home/bbpnrsoa/nrp/src/rl_worker/start.sh --fast_test; read line;\""
+    thecmd="bash -c \"echo -e \\\"${BLUE}You are now in a new terminal responsible for the worker $curr_backend\n${NC}\\\"; docker exec -it $curr_backend bash /home/bbpnrsoa/nrp/src/Worker/start.sh --fast_test; read line;\""
   else
-    thecmd="bash -c \"echo -e \\\"${BLUE}You are now in a new terminal responsible for the worker $curr_backend\n${NC}\\\"; docker exec -it $curr_backend bash /home/bbpnrsoa/nrp/src/rl_worker/start.sh; read line;\""
+    thecmd="bash -c \"echo -e \\\"${BLUE}You are now in a new terminal responsible for the worker $curr_backend\n${NC}\\\"; docker exec -it $curr_backend bash /home/bbpnrsoa/nrp/src/Worker/start.sh; read line;\""
 	
   fi
 	if [ -z ""`which gnome-terminal` ]
@@ -371,30 +371,30 @@ start_experiments() {
 
 setup_experiments() {
   
-  if [ ! -d "./rl_worker" ] 
+  if [ ! -d "./Worker" ] 
   then
   	echo -e "${BLUE}Distributed reinforcement learning experiment files not available!${NC}"
   	exit
-  	#git clone --progress https://github.com/koblibri/rl_worker.git ./rl_worker
+  	#git clone --progress https://github.com/koblibri/Worker.git ./Worker
   fi
   echo -e "${BLUE}Copying distributed reinforcment learning experiment files to containers${NC}"
   for ((i=0; i<num_backends; i++))
   do
 	curr_backend=${nrp_backends[$i]}
 	echo $curr_backend
-	$DOCKER_CMD cp ./rl_worker $curr_backend:/home/bbpnrsoa/nrp/src 
+	$DOCKER_CMD cp ./Worker $curr_backend:/home/bbpnrsoa/nrp/src 
   #Assuming if pytorch is installed in the container, then all the other packages are also there. (Reinstallation)
-  $DOCKER_CMD exec $curr_backend bash -c 'python -c "import torch"' || $DOCKER_CMD exec $curr_backend bash -c 'pip install -r /home/bbpnrsoa/nrp/src/rl_worker/requirements.txt --no-cache-dir'
+  $DOCKER_CMD exec $curr_backend bash -c 'python -c "import torch"' || $DOCKER_CMD exec $curr_backend bash -c 'pip install -r /home/bbpnrsoa/nrp/src/Worker/requirements.txt --no-cache-dir'
   #if [[ "$?" -eq 1 ]]
   #then
   #  echo "Installing python packages"
-	#  $DOCKER_CMD exec $curr_backend bash -c 'pip install -r /home/bbpnrsoa/nrp/src/rl_worker/requirements.txt --no-cache-dir'
+	#  $DOCKER_CMD exec $curr_backend bash -c 'pip install -r /home/bbpnrsoa/nrp/src/Worker/requirements.txt --no-cache-dir'
 	#fi
   echo -e "${BLUE}DRL files installed on container $curr_backend ${NC}"
   done
   
   echo -e "${BLUE}Installing local python requirements${NC}"
-  pip2 install -r ./rl_learner/requirements.txt --no-cache-dir
+  pip2 install -r ./Learner/requirements.txt --no-cache-dir
 }
 
 #Colours
@@ -494,7 +494,7 @@ Commands:
     reset             Restores the backend and frontend containers
     connect_frontend  Connect to the frontend container (Opens in a new terminal)
     connect_backend   Connect to the backend container (Opens in a new terminal)
-    install_drl       Installs all the necessary files for the Distributed Reinforcement Learning Experiment. Can also be used to copy files inside the rl_worker folder to all containers.
+    install_drl       Installs all the necessary files for the Distributed Reinforcement Learning Experiment. Can also be used to copy files inside the Worker folder to all containers.
     start_experiment  Starts all experiments
     start_fast_test   Starts all experiments in the fast test variant
     
