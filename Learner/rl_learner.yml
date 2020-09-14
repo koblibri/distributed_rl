@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: Learner
+  labels:
+    app: Learner
+spec:
+  type: NodePort
+  ports:
+  - port: 30007
+    targetPort: 30007
+    nodePort: 30007
+  selector:
+    app: Learner
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: Learner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: Learner
+  template:
+    metadata:
+      labels:
+        app: Learner
+    spec:
+      containers:
+        - name: Learner
+          image: rifqifatih/rl_learner
+          command: ["bash"]
+          args: ["-c", "python3 -u learner.py --host 0.0.0.0 --port $LEARNER_SERVICE_PORT"]
+          imagePullPolicy: Always
+          ports:
+    - containerPort: 30007

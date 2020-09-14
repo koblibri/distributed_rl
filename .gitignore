@@ -1,5 +1,13 @@
+<<<<<<< HEAD
 *.pyc
 .vscode
 Models
 Experiments
 custom_nrp_config.json
+=======
+*.pyc
+.vscode
+Models
+Experiments
+custom_nrp_config.json
+>>>>>>> Version_2.0
