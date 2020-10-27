@@ -14,6 +14,6 @@ COPY socketserver.py /home/ubuntu/Learner/
 COPY agent.py /home/ubuntu/Learner/
 
 # Only works in Kubernetes
-CMD ["bash", "-c", "python3 Learner_v1.py --host $LEARNER_SERVICE_HOST --port $LEARNER_SERVICE_PORT"]
+CMD ["bash", "-c", "python3 learner.py --host $LEARNER_SERVICE_HOST --port $LEARNER_SERVICE_PORT"]
 
 EXPOSE 30007

@@ -88,7 +88,7 @@ The other option is to use
 > ./custom_nrp_installer.sh start_fast_test
 
 for a quick test without the self learning of robots.
-
+This feature is only executable on the *testing* branch.
 
 You can then monitor the experiment in the terminals or viewing the simulation in the standard NRP-website on [172.19.0.2:9000/#/esv-private](172.19.0.2:9000/#/esv-private).
 
