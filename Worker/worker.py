@@ -26,18 +26,9 @@ try:
     import selectors
 except ImportError:
     import selectors2 as selectors  # run  python -m pip install selectors2
-import argparse
-
-parser = argparse.ArgumentParser(description='Set learner host port.')
-parser.add_argument('--host', default='172.19.0.1', help='Host')
-parser.add_argument('--port', default=65432, help='Port')
-args = parser.parse_args()
-
 sel = selectors.DefaultSelector()
-host = args.host
-port = args.port
-port = int(args.port)
-print("Starting rl-worker on", host, port)
+host = '172.19.0.1'
+port = 65432
 
 
 # if gpu is to be used
@@ -235,7 +226,7 @@ class Worker():
 
         # check if blue object was moved
         if(distance_change_object > eps):
-            return 1
+            return 0.8
 
         print("Distance", distance_real)
         if distance_real >= 1.15:
@@ -307,11 +298,9 @@ class Worker():
         :return: new_joint_state, the new robot joint values, after transferred to j1,j2,j3..., can be used in robot.act()
         :rtype: list
         """
-        # print('raw action:', action)
         action -= 5
         if action <= 0:
             action -= 1
-        # print('action:', action)
         print('transferred action:', action)
         act_joint_num = np.abs(action) - 1
         current_joint_state[int(act_joint_num)] += np.sign(action)
@@ -331,7 +320,6 @@ class Worker():
         elif (test_number == 2):
             return [0, -2, 0, 0, 0, 0], 3, 4
         elif (test_number == 3):
-            self.fast_test = False
             return [-1, -2, 0, 0, 0, 0], 0, 5
 
     def get_strategy_threshhold(self, episode):
@@ -366,21 +354,20 @@ class Worker():
         :rtype: tuple
         """
         init_action = torch.zeros((1, 1), dtype=torch.float32)
-        # init_action = torch.zeros(1, dtype=torch.float32)
         init_reward = torch.tensor(0, dtype=torch.float32).view(1, 1)
-        # init_reward = torch.tensor(0, dtype=torch.float32)
         init_logits = torch.zeros((1, self.num_actions), dtype=torch.float32)
         init_core_state = None
         init_done = torch.tensor(True, dtype=torch.bool).view(1, 1)
-        # init_done = torch.tensor(True, dtype=torch.bool)
         init_worker = (bare_state, tensor_state, init_action,
                        init_reward, init_done, init_logits, init_core_state)
-        print(type(init_worker))
         return init_worker
 
     def run(self):
         """executes num_episodes rounds of attempt of the task
         """
+
+        self.robot.reset()
+        time.sleep(2)
 
         # TODO: here we could randomize initial state (in episodes)
         bare_state = self.robot.get_current_state()
@@ -389,8 +376,11 @@ class Worker():
 
         init_worker = self.set_init_worker(bare_state, tensor_state)
 
+        fast_test_round = False
+
         if self.fast_test is True:
             test_number = 1
+            fast_test_round = True
 
         for i in range(self.num_episodes):
             self.robot.reset()
@@ -408,10 +398,11 @@ class Worker():
             print('episode: ', i)
 
             # push init states, to make learner&worker start from the same init settings
-            self.replay_memory.push(tensor_state, action, reward, done, logits.detach())
+            self.replay_memory.push(
+                tensor_state, action, reward, done, logits.detach())
 
-            if self.replay_memory.position >= self.num_steps:
-                self.send_exp()  # after #num_steps steps, send the trajectory
+            # if self.replay_memory.position >= self.num_steps:
+            #     self.send_exp()  # after #num_steps steps, send the trajectory
 
             for actions_counter in count():  # number of actions
 
@@ -422,13 +413,14 @@ class Worker():
                 strategy_threshold = self.get_strategy_threshhold(i)
                 strategy = self.select_strategy(strategy_threshold)
 
-                if self.fast_test:
+                if fast_test_round:
                     new_joint_state, test_number, action = self.choose_action_with_fast_test(
                         test_number)
                     print("Strategy", "fast-test-round")
 
                 else:
-                    action, logits, core_state = self.agent(x=tensor_state, action=action, reward=reward, dones=None, core_state=core_state, isactor=True)
+                    action, logits, core_state = self.agent(
+                        x=tensor_state, action=action, reward=reward, dones=None, core_state=core_state, isactor=True)
                     action = action.item()
                     print("Strategy", strategy)
 
@@ -436,7 +428,8 @@ class Worker():
                         action = random.randint(0, 11)
 
                     current_joint_state = list(bare_state[0])
-                    new_joint_state = self.transfer_action(current_joint_state, action)
+                    new_joint_state = self.transfer_action(
+                        current_joint_state, action)
 
                 self.robot.act(*new_joint_state)
 
@@ -458,19 +451,19 @@ class Worker():
                 tensor_state = torch.Tensor(list_state)
 
                 done = self.check_done(new_state, init_state, actions_counter)
-                # done = torch.tensor(False, dtype=torch.bool).view(1, 1)
 
                 # here we push False as done, because we pushed a True done at init_state
-                self.replay_memory.push(tensor_state, action, reward, torch.tensor(False, dtype=torch.bool).view(1, 1), logits.detach())
+                self.replay_memory.push(tensor_state, action, reward, torch.tensor(
+                    False, dtype=torch.bool).view(1, 1), logits.detach())
 
-                if self.replay_memory.position >= self.num_steps:
-                    self.send_exp()  # after #num_steps steps, send the trajectory
+                # if self.replay_memory.position >= self.num_steps:
+                #     self.send_exp()  # after #num_steps steps, send the trajectory
 
                 if done:
                     # self.send_exp()
                     break
-
-            # self.send_exp()  # one game over, send the experience
+            fast_test_round = False
+            self.send_exp()  # one game over, send the experience
             print('number of actions in this round game:', actions_counter + 2)
         print(self.num_episodes, ' training over')
         sel.close()  # cleanup the selector as every experiences are sent

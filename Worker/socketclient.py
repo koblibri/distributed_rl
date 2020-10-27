@@ -161,7 +161,6 @@ class Message:
             self._recv_buffer = self._recv_buffer[hdrlen:]
 
     def process_response(self):
-        import worker  # Looks stupid, but circular dependencies...
         content_len = self.content_length
         if not len(self._recv_buffer) >= content_len:
             return

@@ -24,22 +24,17 @@ try:
     import selectors
 except ImportError:
     import selectors2 as selectors  # run  python -m pip install selectors2
-import argparse
 
-parser = argparse.ArgumentParser(description='Set learner host port.')
-parser.add_argument('--host', default=socket.gethostbyname(socket.gethostname()), help='Host')
-parser.add_argument('--port', default=65432, help='Port')
-args = parser.parse_args()
-
+host = '172.19.0.1'
+port = 65432
 sel = selectors.DefaultSelector()
-host = args.host
-port = int(args.port)
-print("Starting rl-learner on", host, port)
+
 
 device = torch.device('cuda')
 
 # trajectory data structure
-Transition = namedtuple('Transition', ('state', 'action', 'reward', 'done', 'logits'))
+Transition = namedtuple(
+    'Transition', ('state', 'action', 'reward', 'done', 'logits'))
 
 
 class ReplayMemory(object):
@@ -64,10 +59,10 @@ class ReplayMemory(object):
         if self.position == 0:
             print('error: empty memory when sampling')
             return []
-        if self.position <= batch_size:
-            return self.memory
-        else:
-            return self.memory[-batch_size:]
+        trajectory = [self.memory[0]]
+        self.memory.pop(0)
+        self.position -= 1
+        return trajectory
 
     def __len__(self):
         return len(self.memory)
@@ -156,7 +151,8 @@ class Learner():
         logits_trajectory = torch.stack(logits_list, 0)
 
         # push trajectory into memory
-        self.replay_memory.push(state_trajectory, action_trajectory, reward_trajectory, done_trajectory, logits_trajectory)
+        self.replay_memory.push(state_trajectory, action_trajectory,
+                                reward_trajectory, done_trajectory, logits_trajectory)
 
         print ("Got new stuff with len: ", len(data))
 
@@ -165,7 +161,7 @@ class Learner():
         and running multiple workers needs much computer resources. We don't want old trajectories overwhelming the 
         gradient update.
         '''
-        for i in range(3):
+        while self.replay_memory.position != 0:
             self.training_process()
         self.state_dict = self.agent.state_dict()
         torch.save(self.agent.state_dict(), 'params.pkl')
@@ -197,7 +193,8 @@ class Learner():
         behavior_logits_batch = behavior_logits_batch.permute(1, 0, 2)
 
         # feed in to neural network, get learner output
-        target_logits, baseline = self.agent(x=state_batch, action=action_batch, reward=reward_batch, dones=done_batch, core_state=None, isactor=False)
+        target_logits, baseline = self.agent(
+            x=state_batch, action=action_batch, reward=reward_batch, dones=done_batch, core_state=None, isactor=False)
 
         # make time major of learner output
         target_logits = target_logits.permute(1, 0, 2)
@@ -211,7 +208,8 @@ class Learner():
         # the actions in agent_outputs and learner_outputs at time step `t` is what
         # leads to the environment outputs at time step `t`.
         actions, behaviour_logits, rewards, dones = action_batch.view(action_batch.shape[0], -1).type(torch.long)[1:], behavior_logits_batch[1:], \
-                                                    reward_batch.view(reward_batch.shape[0], -1)[1:], done_batch.view(done_batch.shape[0], -1)[1:]
+            reward_batch.view(
+                reward_batch.shape[0], -1)[1:], done_batch.view(done_batch.shape[0], -1)[1:]
 
         target_logits, baseline = target_logits[:-1], baseline[:-1]
 
@@ -229,9 +227,14 @@ class Learner():
         self.optimizer.zero_grad()
 
         criterion = agent.MyLoss()
-        loss = criterion.compute_policy_gradient_loss(target_logits, actions, pg_advantages)  # policy_gradient_loss
-        loss += self.baseline_cost * criterion.compute_baseline_loss(vs=vs, baseline=baseline)  # baseline_loss
-        loss += self.entropy_cost * criterion.compute_entropy_loss(target_logits)  # entropy regularization
+        loss = criterion.compute_policy_gradient_loss(
+            target_logits, actions, pg_advantages)  # policy_gradient_loss
+        loss += self.baseline_cost * \
+            criterion.compute_baseline_loss(
+                vs=vs, baseline=baseline)  # baseline_loss
+        loss += self.entropy_cost * \
+            criterion.compute_entropy_loss(
+                target_logits)  # entropy regularization
 
         # loss in RL is not like loss in traditional ML,
         # the value of loss in RL only means the amplitude of update and direction (award or punishment).
@@ -283,7 +286,3 @@ if os.path.exists('params.pkl'):
 if __name__ == "__main__":
 
     learner.socket_init()
-
-
-
-

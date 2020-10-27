@@ -1,4 +1,5 @@
-# How To: Run multiple Workers
+# Distributed Reinforcement Learning
+## How To: Run multiple Workers
 ### Requirements:
  - Docker
  - Python2
@@ -6,16 +7,16 @@
  - ~15GB of available disk space for initial NRP installation
  - ~10GB of available disk space per additional worker
 
-## Step 1: Set the number of NRP Backends
+### Step 1: Set the number of NRP Backends
 Go into the *custom_nrp_installer.sh* script and edit **line 435** to a number greater than zero.
 This will set-up as many NRP-Backends as specified.
-## Step 2: Install NRP with the custom installer script
+### Step 2: Install NRP with the custom installer script
 > ./custom_nrp_installer.sh install
 
 This will pull the docker images for frontend and backend and copy experiments and model files to the NRP-backends. 
 
 The frontend will be installed on 172.19.0.2:9000 and the backends will start with the IP 172.19.0.3:8080 (nrp0) and the IP increases with each added container.
-## Step 3: Edit the frontend service discovery
+### Step 3: Edit the frontend service discovery
 One manual step is required: If the install succeded, in the end you will be asked to edit the service discovery configuration of the frontend container.
 To do this, go into the folder of the installer script and find the *custom_nrp_config.json*. Copy the content. 
 Then, connect to the frontend container, e.g. with VS Code, or on command line with 
@@ -67,7 +68,7 @@ $ from hbp_nrp_virtual_coach.virtual_coach import VirtualCoach
 $ vc = VirtualCoach(environment='local', storage_username='nrpuser', storage_password='password')
 $ vc.print_available_servers()
 ```
-## Step 4: Install the Distributed Reinforcement Learning (DRL) files
+### Step 4: Install the Distributed Reinforcement Learning (DRL) files
 The last setup-step is to copy the custom experiment and worker files to the respective backends. To do this, use the command
 
 > ./custom_nrp_installer.sh install_drl
@@ -76,7 +77,7 @@ This may take a while, since it also has to individually install all python requ
 
 It will also install the requirements for the local learner.
 
-## Step 5: Start the DRL-Experiment
+### Step 5: Start the DRL-Experiment
 Start all robots with
 
 > ./custom_nrp_installer.sh start_experiment
@@ -100,9 +101,9 @@ or
 
 to make sure the IPs and NRP-Backendservers are not occupied by any containers not closed properly.
 
-# Distributed Reinforcement Learning Agent
+## Alternative Setup
 
-## Installing packages with pip
+### Step 1: Installing packages with pip
 
 After initializing your backend container, enter the container, copy the repository and install the required packages:
 
@@ -114,9 +115,9 @@ pip install -r requirements.txt --no-cache-dir
 ```
 **Note**: If you run the learner locally, you also have to install the packages in your local environment. (Check if you run Python 2.7. on your local machine, not Python3!) 
 
-## Socket Inits:
+### Step 2: Socket Inits
 Configure your IPs! 
-The IP in `SERdemo1Learner/Learner_v1` is the Server-IP and must be the same as IP in `SERdemo1/Worker_v1`. 
+The IP in `Learner/learner.py` is the Server-IP and must be the same as IP in `Worker/worker.py`. 
 
 Either work inside the Docker-Container and use localhost 127.0.0.1
 Or have Worker inside the container and attach the Learner to the Docker-Host. Use 
@@ -126,23 +127,23 @@ docker network inspect nrpnet
  to find out the IP of your Docker-Host (e.g 172.19.0.1).
 
 
-## Import experiment files
+### Step 3: Import Experiment Files
 To load the experiment in your installation of the NRP (either local or source install), open the
-NRP frontend in your browser at location http://host.docker.internal:9000/#/esv-private, and then navigate to the 'My experiments' tab. There, click on the 'Import folder'
-button, and select the `SERdemo1/experiment/ser_rl_ss20` folder to upload. After that, the experiment should
+NRP frontend in your browser at location http://host.docker.internal:9000/#/esv-private, and then navigate to the 'My experiments' tab. There, click on the 'Import zip'
+button, and select the `Worker/ser_rl_ss20.zip` folder to upload. After that, the experiment should
 appear under 'My experiments', and you should be able to launch it.
 
 
-## Start Reinforcement Learning:
+### Step 4: Start Reinforcement Learning:
 1. Start Learner either in the container:
 ```bash
 docker exec -it nrp bash
 cd /home/bbpnrsoa/distributed-reinforcement-learning
-python SERdemo1Learner/Learner_v1.py
+python Learner/learner.py
 ```
 or start the learner locally:
 ```bash
-python SERdemo1Learner/Learner_v1.py
+python Learner/learner.py
 ```
 You should see
 ```bash
@@ -156,7 +157,7 @@ in your console now.
 ```bash
 docker exec -it nrp bash
 cd /home/bbpnrsoa/distributed-reinforcement-learning
-python SERdemo1/Worker_v1.py
+python Worker/worker.py
 ```
 After the robot inital commands you should see
 ```bash
@@ -167,12 +168,14 @@ in your worker terminal and
 ('accepted connection from', ('your IP address', 34928))
 ```
 in your learner terminal.
-## Experiment Setup
+
+
+## Experiment Description
 The environment consists of one Hollie Robot arm with six Degrees of Freedom, sitting on a table. A
 Schunk hand is mounted on the arm, but it is of little relevance to the task to be solved. There is
 also one blue cylinder on the table.
 
-<img src="SERdemo1/experiment/ser_rl_ss20/ExDDemoManipulation.png" width="400" />
+<img src="Worker/experiment_ser_rl_ss20_ExDDemoManipulation.png" width="400" />
 
 The task is for the arm to move towards the cylinder and knock it off the table. The observations at
 each time step are: 
@@ -184,45 +187,3 @@ and the actions to be taken are:
 
 A position controller takes care of moving the joints to the desired positions.
 
-# Besides reinforcement learning 
-
-## Interacting with the Simulation
-After launching the experiment and clicking on the play button, you can interact with the simulation
-from a python shell though the Agent class in 'experiment_api.py'. It is better to do this within
-the docker container, because you might need to install additional dependencies if you want to run 
-it on your system. Below are the steps for interacting with the simulation from within the docker 
-container:
-
-0. Move to the experiment folder
-```
-$ cd SERdemo1/experiment/ser_rl_ss20
-```
-
-1. Copy the experiment_api.py file to the backend container:
-```
-$ docker cp experiment_api.py nrp:/home/bbpnrsoa/
-```
-
-2. Access the backend docker container:
-```
-$ docker exec -it nrp bash
-```
-
-3. Open a python shell inside the backend container and import the experiment api:
-```
-$ cd ~
-
-$ python
-
->>> import experiment_api
-```
-
-4. Instantiate the agent class and explore the available functions:
-```
->>> agent = experiment_api.Agent()
->>> agent.get_current_state()
->>> agent.act(1, 1, 1, 1, 1, 1)
->>> agent.reset()
-```
-
-Feel free to extend the experiment_api.py with functions that you see necessary.

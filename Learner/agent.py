@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+torch.manual_seed(0)
+
 
 class Agent(nn.Module):
 
@@ -35,12 +37,14 @@ class Agent(nn.Module):
             seq_len = x.shape[0]
             batch_size = x.shape[1]
 
-        x = x.view(seq_len, batch_size, -1)  # just in case, actually not resized
+        # just in case, actually not resized
+        x = x.view(seq_len, batch_size, -1)
         action = F.one_hot(action.long(), num_classes=self.num_actions)
         action = action.view(seq_len, batch_size, -1).to(torch.float32)
         reward = reward.view(seq_len, batch_size, -1)
 
-        x = torch.cat((x, action, reward), dim=2)  # concatenate state, action and reward, feed into LSTM
+        # concatenate state, action and reward, feed into LSTM
+        x = torch.cat((x, action, reward), dim=2)
 
         hx = None
         cx = None
@@ -57,13 +61,17 @@ class Agent(nn.Module):
         for i in range(seq_len):
             if dones is not None:
                 # if dones_t is True, cut the connection with previous hidden state
-                hx = torch.where(dones[i].view(-1, 1), torch.zeros((batch_size, self.lstm_hidden)), hx)
-                cx = torch.where(dones[i].view(-1, 1), torch.zeros((batch_size, self.lstm_hidden)), cx)
+                hx = torch.where(
+                    dones[i].view(-1, 1), torch.zeros((batch_size, self.lstm_hidden)), hx)
+                cx = torch.where(
+                    dones[i].view(-1, 1), torch.zeros((batch_size, self.lstm_hidden)), cx)
             hx, cx = self.lstm(x[i], (hx, cx))
             lstm_out.append(hx)
-            core_state = torch.stack([hx, cx], 0)  # core_state which will be passing in a trajectory
+            # core_state which will be passing in a trajectory
+            core_state = torch.stack([hx, cx], 0)
 
-        x = torch.cat(lstm_out, 0)  # concatenate lstm output and feed into Head (output layers of model)
+        # concatenate lstm output and feed into Head (output layers of model)
+        x = torch.cat(lstm_out, 0)
 
         new_action, policy_logits, baseline = self.head(x)
 
@@ -85,9 +93,11 @@ class Head(nn.Module):
     def forward(self, x):
         policy_logits = self.actor_linear(x)
         baseline = self.critic_linear(x)
-        prob_weights = F.softmax(policy_logits, dim=1).clamp(1e-10, 1)  # clamped, in case error in torch.multinomial
+        prob_weights = F.softmax(policy_logits, dim=1).clamp(
+            1e-10, 1)  # clamped, in case error in torch.multinomial
 
-        new_action = torch.multinomial(prob_weights, 1, replacement=True)  # new action sampled from prob_weights
+        # new action sampled from prob_weights
+        new_action = torch.multinomial(prob_weights, 1, replacement=True)
         return new_action, policy_logits, baseline
 
 
@@ -120,5 +130,3 @@ class MyLoss(nn.Module):
         advantages = advantages.requires_grad_(False)
         policy_gradient_loss_per_timestep = cross_entropy * advantages
         return torch.sum(policy_gradient_loss_per_timestep)
-
-
