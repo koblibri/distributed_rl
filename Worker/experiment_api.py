@@ -27,7 +27,7 @@ class Robot:
         rospy.wait_for_service("gazebo/set_model_state", 10.0)
         self.__get_pose_srv = rospy.ServiceProxy("gazebo/get_model_state", GetModelState)
         self.__set_pose_srv = rospy.ServiceProxy("gazebo/set_model_state", SetModelState)
-        self.__get_link_srv = rospy.ServiceProxy("gazebo/get_link_state", GetLinkState)
+        self.__get_link_srv = rospy.ServiceProxy("gazebo/get_link_state", GetLinkState)  # get position of robot's link
 
 
         # get the initial state of the blue object
@@ -35,7 +35,7 @@ class Robot:
         self.object_init_state.model_name = 'BLUE_cylinder'
         self.object_init_state.pose = self.__get_pose_srv('BLUE_cylinder', 'world').pose
         self.object_init_state.scale = self.__get_pose_srv('BLUE_cylinder', 'world').scale
-        
+
 
         # Variables that hold finger states
         self.__current_state = [None]
@@ -81,7 +81,6 @@ class Robot:
         return self.__current_state[0][:-1][0], self.__get_pose_srv('BLUE_cylinder', 'world').pose, \
                self.__get_link_srv('robot::COL_COL_COL_VIS_VIS_VIS_VIS_VIS_VIS_VIS_VIS_VIS_hollie_real.018', 'world').link_state.pose
 
-
     def act(self, j1, j2, j3, j4, j5, j6):
         """
         Takes an action by setting the six join positions
@@ -93,5 +92,3 @@ class Robot:
         self.joint_topics[4].publish(Float64(j5))
         self.joint_topics[5].publish(Float64(j6))
 
-# to get position of robot's hand, using:
-# self.__get_pose_srv('robot', 'COL_COL_COL_VIS_VIS_VIS_VIS_VIS_VIS_VIS_VIS_VIS_hollie_real.005')
